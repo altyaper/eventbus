@@ -22,4 +22,24 @@ defmodule EventbusWeb.TopicsLiveTest do
 
     assert html =~ "a-new-topic"
   end
+
+  test "groups topics under their app", %{conn: conn} do
+    topic_fixture(name: "chat.lobby")
+    topic_fixture(name: "standalone")
+
+    {:ok, live, _html} = live(conn, ~p"/")
+
+    assert has_element?(live, "#app-chat", "chat.lobby")
+    assert has_element?(live, "#ungrouped-topics", "standalone")
+  end
+
+  test "a created topic shows up in its app group", %{conn: conn} do
+    {:ok, live, _html} = live(conn, ~p"/")
+
+    live
+    |> form("#topic-form", topic: %{name: "chat.random"})
+    |> render_submit()
+
+    assert has_element?(live, "#app-chat", "chat.random")
+  end
 end

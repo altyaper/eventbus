@@ -22,6 +22,19 @@ defmodule Eventbus.Topics do
   end
 
   @doc """
+  Returns topics grouped by `Topic.app/1`, as `%{app: app, topics: topics}`
+  maps. Apps are sorted by name with ungrouped topics (`app: nil`) last, and
+  topics within an app are newest first.
+  """
+  def list_topics_by_app do
+    list_topics()
+    |> Enum.sort_by(& &1.inserted_at, {:desc, DateTime})
+    |> Enum.group_by(&Topic.app/1)
+    |> Enum.sort_by(fn {app, _topics} -> {is_nil(app), app} end)
+    |> Enum.map(fn {app, topics} -> %{app: app, topics: topics} end)
+  end
+
+  @doc """
   Gets a single topic.
 
   Raises `Ecto.NoResultsError` if the Topic does not exist.

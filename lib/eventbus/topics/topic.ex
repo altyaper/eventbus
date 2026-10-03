@@ -18,6 +18,17 @@ defmodule Eventbus.Topics.Topic do
   def valid_name?(name) when is_binary(name), do: Regex.match?(@name_format, name)
   def valid_name?(_name), do: false
 
+  @doc """
+  The application a topic belongs to: the part of its name before the first
+  dot (`"chat.lobby"` -> `"chat"`), or `nil` for names without a dot.
+  """
+  def app(%__MODULE__{name: name}) do
+    case String.split(name, ".", parts: 2) do
+      [app, _rest] -> app
+      [_no_dot] -> nil
+    end
+  end
+
   @doc false
   def changeset(topic, attrs) do
     topic

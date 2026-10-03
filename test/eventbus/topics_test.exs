@@ -14,6 +14,21 @@ defmodule Eventbus.TopicsTest do
       assert Topics.list_topics() == [topic]
     end
 
+    test "list_topics_by_app/0 groups topics by name prefix, apps sorted, ungrouped last" do
+      ungrouped = topic_fixture(name: "standalone")
+      chat_lobby = topic_fixture(name: "chat.lobby")
+      logs = topic_fixture(name: "changologs.logs")
+      chat_team = topic_fixture(name: "chat.team")
+
+      assert [
+               %{app: "changologs", topics: [^logs]},
+               %{app: "chat", topics: chat_topics},
+               %{app: nil, topics: [^ungrouped]}
+             ] = Topics.list_topics_by_app()
+
+      assert Enum.sort_by(chat_topics, & &1.id) == [chat_lobby, chat_team]
+    end
+
     test "get_topic!/1 returns the topic with given id" do
       topic = topic_fixture()
       assert Topics.get_topic!(topic.id) == topic
@@ -84,6 +99,19 @@ defmodule Eventbus.TopicsTest do
 
     test "returns an error changeset for an invalid name" do
       assert {:error, %Ecto.Changeset{}} = Topics.get_or_create_by_name("Bad Name")
+    end
+  end
+
+  describe "Topic.app/1" do
+    alias Eventbus.Topics.Topic
+
+    test "is the part of the name before the first dot" do
+      assert Topic.app(%Topic{name: "chat.lobby"}) == "chat"
+      assert Topic.app(%Topic{name: "changologs.logs.errors"}) == "changologs"
+    end
+
+    test "is nil when the name has no dot" do
+      assert Topic.app(%Topic{name: "standalone"}) == nil
     end
   end
 end
