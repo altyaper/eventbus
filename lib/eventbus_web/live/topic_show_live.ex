@@ -73,13 +73,19 @@ defmodule EventbusWeb.TopicShowLive do
           </:actions>
         </.header>
 
-        <.form for={@form} phx-submit="publish_test" class="flex items-end gap-2 mt-6">
-          <.input
-            field={@form[:payload]}
-            label="Publish a test event (JSON)"
-            placeholder={~s({"hello": "world"})}
-          />
-          <.button>Publish</.button>
+        <.form for={@form} phx-submit="publish_test" class="mt-6">
+          <label for={@form[:payload].id} class="label mb-1 text-sm">
+            Publish a test event (JSON)
+          </label>
+          <%!-- Label sits outside the row and items align to the top. .input's
+               wrapper is a daisyUI fieldset with vertical padding and a bottom
+               margin; zero them so the input's top edge is the row's top edge. --%>
+          <div class="flex items-start gap-2">
+            <div class="flex-1 [&_.fieldset]:mb-0 [&_.fieldset]:py-0">
+              <.input field={@form[:payload]} placeholder={~s({"hello": "world"})} />
+            </div>
+            <.button>Publish</.button>
+          </div>
         </.form>
 
         <div class="mt-6 space-y-2">
