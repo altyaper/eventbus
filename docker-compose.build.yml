@@ -1,0 +1,6 @@
+# Local-build overlay: `docker compose -f docker-compose.yml -f docker-compose.build.yml`
+# (the make docker-* targets pass both). Kept out of docker-compose.yml so that
+# file deploys from the published image anywhere, e.g. Portainer.
+services:
+  app:
+    build: .

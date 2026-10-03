@@ -158,10 +158,14 @@ clean: ## Remove build output and caches
 DOCKER_DEFAULT_PLATFORM := linux/arm64
 export DOCKER_DEFAULT_PLATFORM
 
+# docker-compose.yml only references the published image (so it pastes into
+# Portainer as-is); the overlay adds `build: .` for local builds.
+COMPOSE_BUILD := docker compose -f docker-compose.yml -f docker-compose.build.yml
+
 docker-build: ## Build the app image (stages an extra CA cert if present, see Dockerfile)
 	@test -f "$(EXTRA_CA_SRC)" && cp "$(EXTRA_CA_SRC)" docker/extra-ca.crt \
 		|| rm -f docker/extra-ca.crt
-	docker compose build
+	$(COMPOSE_BUILD) build
 
 docker-push: ## Build for arm64 (the Pi) and push to Docker Hub as $(IMAGE):$(TAG) — needs `docker login`
 	@test -f "$(EXTRA_CA_SRC)" && cp "$(EXTRA_CA_SRC)" docker/extra-ca.crt \
@@ -169,7 +173,7 @@ docker-push: ## Build for arm64 (the Pi) and push to Docker Hub as $(IMAGE):$(TA
 	docker buildx build --platform $(DOCKER_DEFAULT_PLATFORM) -t $(IMAGE):$(TAG) --push .
 
 docker-up: docker-build ## Build and start the app + its own Postgres (needs .env, see docker.env.example)
-	docker compose up -d
+	$(COMPOSE_BUILD) up -d
 
 docker-down: ## Stop and remove the app + its Postgres containers
 	docker compose down

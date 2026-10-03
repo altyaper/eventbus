@@ -85,12 +85,16 @@ if config_env() == :prod do
   # want to use a different value for prod and you most likely don't want
   # to check this value into version control, so we use an environment
   # variable instead.
-  secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
-      raise """
-      environment variable SECRET_KEY_BASE is missing.
-      You can generate one by calling: mix phx.gen.secret
-      """
+  secret_key_base = System.get_env("SECRET_KEY_BASE", "")
+
+  # Checked here rather than left to Plug, which only raises on the first
+  # request that sets a cookie, long after the app looks healthy.
+  if byte_size(secret_key_base) < 64 do
+    raise """
+    environment variable SECRET_KEY_BASE is missing or shorter than 64 bytes.
+    Generate one with: openssl rand -base64 64 | tr -d '\\n'  (or mix phx.gen.secret)
+    """
+  end
 
   host = System.get_env("PHX_HOST") || "example.com"
 
