@@ -141,6 +141,15 @@ defmodule EventbusWeb.AppLiveTest do
       refute has_element?(live, "#env-origins button")
     end
 
+    test "deleting the app disconnects its chat sockets", %{conn: conn, app: app} do
+      user = chat_user_fixture(app)
+      EventbusWeb.Endpoint.subscribe("chat_socket:#{user.id}")
+      {:ok, live, _html} = live(conn, ~p"/apps/chat/settings")
+
+      live |> element("#delete-confirm-button") |> render_click()
+      assert_receive %Phoenix.Socket.Broadcast{event: "disconnect"}
+    end
+
     test "deletes the app from settings", %{conn: conn, app: app} do
       topic_fixture(name: "chat.lobby")
       {:ok, live, _html} = live(conn, ~p"/apps/chat/settings")

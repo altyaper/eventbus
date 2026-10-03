@@ -68,6 +68,7 @@ defmodule EventbusWeb.Router do
     post "/chat/rooms/:room_id/members", ChatRoomController, :add_member
     delete "/chat/rooms/:room_id/members/:user_id", ChatRoomController, :remove_member
     post "/chat/rooms/:room_id/messages", ChatRoomController, :create_message
+    delete "/chat/rooms/:room_id/messages/:id", ChatRoomController, :delete_message
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

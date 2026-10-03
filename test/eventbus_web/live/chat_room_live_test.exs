@@ -93,6 +93,35 @@ defmodule EventbusWeb.ChatRoomLiveTest do
       refute has_element?(live, "#load-older")
     end
 
+    test "deletes messages and shows edits, replies and reactions live", %{
+      conn: conn,
+      app: app,
+      ann: ann,
+      room: room
+    } do
+      message = message_fixture(ann, room, %{"text" => "original"})
+      {:ok, live, _html} = live(conn, ~p"/apps/acme/chat/rooms/#{room.id}")
+
+      {:ok, _, events} = Messages.edit_message(ann, room, message.id, %{"text" => "edited text"})
+      Broadcast.dispatch(app, events)
+      assert has_element?(live, "#message-#{message.id}", "edited text")
+      assert has_element?(live, "#message-#{message.id}", "(edited)")
+
+      {:ok, reply, events} =
+        Messages.send_message(ann, room, %{"text" => "a reply", "reply_to_id" => message.id})
+
+      Broadcast.dispatch(app, events)
+      assert has_element?(live, "#message-#{reply.id}", "edited text")
+
+      {:ok, events} = Eventbus.Chat.Reactions.add_reaction(ann, room, reply.id, "🎉")
+      Broadcast.dispatch(app, events)
+      assert has_element?(live, "#message-#{reply.id}", "🎉 1")
+
+      live |> element("#message-#{message.id}-delete") |> render_click()
+      assert has_element?(live, "#message-#{message.id}", "This message was deleted")
+      assert Messages.get_room_message(room, message.id).deleted_at
+    end
+
     test "direct rooms can't be changed", %{conn: conn, app: app} do
       {:ok, direct, _} = Rooms.create_direct_room(app, "ann", "bo")
       {:ok, live, _html} = live(conn, ~p"/apps/acme/chat/rooms/#{direct.id}")
@@ -115,17 +144,28 @@ defmodule EventbusWeb.ChatRoomLiveTest do
       %{conn: log_in_user(conn, member)}
     end
 
-    test "sees the room but can't manage members", %{conn: conn, app: app, room: room} do
+    test "sees the room but can't manage members or delete", %{
+      conn: conn,
+      app: app,
+      ann: ann,
+      room: room
+    } do
+      message = message_fixture(ann, room)
       {:ok, live, _html} = live(conn, ~p"/apps/acme/chat/rooms/#{room.id}")
+      assert has_element?(live, "#message-#{message.id}")
 
       assert has_element?(live, "#member-ann")
       refute has_element?(live, "#member-form")
       refute has_element?(live, "#member-ann-remove")
 
+      refute has_element?(live, "[id$=-delete]")
       render_hook(live, "remove_member", %{"user-id" => "ann"})
       render_hook(live, "add_member", %{"member" => %{"user_id" => "cy", "role" => "member"}})
       assert Rooms.member?(room, Users.get_user(app, "ann"))
       assert Users.get_user(app, "cy") == nil
+
+      render_hook(live, "delete_message", %{"id" => Integer.to_string(message.id)})
+      refute Messages.get_room_message(room, message.id).deleted_at
     end
   end
 end

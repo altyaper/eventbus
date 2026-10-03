@@ -160,4 +160,34 @@ defmodule EventbusWeb.ChatApiTest do
       end
     end
   end
+
+  describe "DELETE /api/chat/rooms/:room_id/messages/:id" do
+    test "deletes any message of the app's rooms", %{conn: conn, app: app} do
+      ann = caller_fixture(app, external_id: "ann")
+      room = room_fixture(app, %{}, [ann.user])
+      message = message_fixture(ann, room)
+
+      conn1 = delete(conn, ~p"/api/chat/rooms/#{room.id}/messages/#{message.id}")
+
+      assert %{"message" => %{"deleted_at" => deleted_at, "text" => ""}} =
+               json_response(conn1, 200)
+
+      assert deleted_at
+
+      assert json_response(delete(conn, ~p"/api/chat/rooms/#{room.id}/messages/999999"), 404)
+      assert json_response(delete(conn, ~p"/api/chat/rooms/#{room.id}/messages/abc"), 404)
+    end
+
+    test "another app's room is a 404", %{conn: conn} do
+      other = app_fixture()
+      ann = caller_fixture(other)
+      room = room_fixture(other, %{}, [ann.user])
+      message = message_fixture(ann, room)
+
+      assert json_response(
+               delete(conn, ~p"/api/chat/rooms/#{room.id}/messages/#{message.id}"),
+               404
+             )
+    end
+  end
 end

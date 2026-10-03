@@ -47,4 +47,10 @@ defmodule Eventbus.Chat.Users do
     do: Repo.get_by(User, application_id: app_id, external_id: external_id)
 
   def get_user(_app, _external_id), do: nil
+
+  @doc """
+  The ids of all of the app's chat users, e.g. to disconnect their sockets.
+  """
+  def list_user_ids(%App{id: app_id}),
+    do: Repo.all(from u in User, where: u.application_id == ^app_id, select: u.id)
 end

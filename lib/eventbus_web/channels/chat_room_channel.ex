@@ -5,7 +5,7 @@ defmodule EventbusWeb.ChatRoomChannel do
   app allows, and only if they're a member or the room is public.
 
   Clients write with pushes that reply `{:ok, ...}` or
-  `{:error, %{reason: "not_found" | "invalid" | "rate_limited"}}`; room events
+  `{:error, %{reason: "not_found" | "forbidden" | "invalid" | "rate_limited"}}`; room events
   (`chat.message.created`, `chat.member.joined`, ...) arrive as pushes named
   after the event. Identity always comes from the socket's token.
 
@@ -20,7 +20,7 @@ defmodule EventbusWeb.ChatRoomChannel do
   use Phoenix.Channel
 
   alias Eventbus.Origins
-  alias Eventbus.Chat.{Broadcast, Messages, Presence, ReadStates, Rooms, Serializer}
+  alias Eventbus.Chat.{Broadcast, Messages, Presence, Reactions, ReadStates, Rooms, Serializer}
 
   # At most this many sends per socket in the window.
   @send_limit 10
@@ -87,7 +87,7 @@ defmodule EventbusWeb.ChatRoomChannel do
     case take_send_slot(socket) do
       {:ok, socket} ->
         %{chat_caller: caller, room: room} = socket.assigns
-        attrs = Map.take(params, ["text", "client_ref", "metadata"])
+        attrs = Map.take(params, ["text", "client_ref", "metadata", "reply_to_id"])
 
         case Messages.send_message(caller, room, attrs) do
           {:ok, message, events} ->
@@ -100,6 +100,41 @@ defmodule EventbusWeb.ChatRoomChannel do
 
       :rate_limited ->
         {:reply, error(:rate_limited), socket}
+    end
+  end
+
+  def handle_in("message:edit", %{"id" => id, "text" => text}, socket) do
+    %{chat_caller: caller, room: room} = socket.assigns
+
+    caller
+    |> Messages.edit_message(room, id, %{"text" => text})
+    |> reply_with_message(socket)
+  end
+
+  def handle_in("message:delete", %{"id" => id}, socket) do
+    %{chat_caller: caller, room: room} = socket.assigns
+
+    caller
+    |> Messages.delete_message(room, id)
+    |> reply_with_message(socket)
+  end
+
+  def handle_in("reaction:" <> action, %{"message_id" => message_id, "emoji" => emoji}, socket)
+      when action in ["add", "remove"] do
+    %{chat_caller: caller, room: room} = socket.assigns
+
+    result =
+      if action == "add",
+        do: Reactions.add_reaction(caller, room, message_id, emoji),
+        else: Reactions.remove_reaction(caller, room, message_id, emoji)
+
+    case result do
+      {:ok, events} ->
+        Broadcast.dispatch(caller.app, events)
+        {:reply, :ok, socket}
+
+      {:error, reason} ->
+        {:reply, error(reason), socket}
     end
   end
 
@@ -215,6 +250,13 @@ defmodule EventbusWeb.ChatRoomChannel do
   defp typing_ttl_ms, do: Application.get_env(:eventbus, :chat_typing_ttl_ms, 4_000)
   defp typing_throttle_ms, do: Application.get_env(:eventbus, :chat_typing_throttle_ms, 3_000)
 
+  defp reply_with_message({:ok, message, events}, socket) do
+    Broadcast.dispatch(socket.assigns.chat_caller.app, events)
+    {:reply, {:ok, %{message: Serializer.message(message)}}, socket}
+  end
+
+  defp reply_with_message({:error, reason}, socket), do: {:reply, error(reason), socket}
+
   defp take_send_slot(socket) do
     now = System.monotonic_time(:millisecond)
     recent = Enum.filter(socket.assigns.send_times, &(now - &1 < @send_window_ms))
@@ -227,6 +269,6 @@ defmodule EventbusWeb.ChatRoomChannel do
   defp error(%Ecto.Changeset{} = changeset),
     do: {:error, %{reason: "invalid", errors: Serializer.errors(changeset)}}
 
-  defp error(reason) when reason in [:not_found, :invalid, :rate_limited],
+  defp error(reason) when reason in [:not_found, :forbidden, :invalid, :rate_limited],
     do: {:error, %{reason: Atom.to_string(reason)}}
 end

@@ -19,26 +19,37 @@ defmodule Eventbus.Chat.Message do
     belongs_to :room, Eventbus.Chat.Room
     belongs_to :sender, Eventbus.Chat.User
     belongs_to :reply_to, __MODULE__
+    has_many :reactions, Eventbus.Chat.Reaction
 
     timestamps(type: :utc_datetime_usec)
   end
 
   @doc """
   Changeset for a new message. Room and sender are set by the caller, never
-  cast.
+  cast; the context checks that `reply_to_id` is a message of the same room.
   """
   def create_changeset(message, attrs) do
     message
-    |> cast(attrs, [:text, :metadata, :client_ref])
+    |> cast(attrs, [:text, :metadata, :client_ref, :reply_to_id])
     |> validate_text()
     |> validate_length(:client_ref, max: 100)
     |> validate_metadata()
     |> unique_constraint([:sender_id, :client_ref])
   end
 
+  @doc """
+  Changeset for editing a message's text.
+  """
+  def edit_changeset(message, attrs) do
+    message
+    |> cast(attrs, [:text])
+    |> validate_text()
+    |> put_change(:edited_at, DateTime.utc_now())
+  end
+
   defp validate_text(changeset) do
     changeset
-    |> update_change(:text, &String.trim/1)
+    |> update_change(:text, &(&1 && String.trim(&1)))
     |> validate_required([:text])
     |> validate_length(:text, max: @max_text)
   end

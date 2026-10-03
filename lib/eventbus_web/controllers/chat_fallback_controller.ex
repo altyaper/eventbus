@@ -10,6 +10,8 @@ defmodule EventbusWeb.ChatFallbackController do
 
   def call(conn, {:error, :not_found}), do: error(conn, :not_found, "not found")
 
+  def call(conn, {:error, :forbidden}), do: error(conn, :forbidden, "forbidden")
+
   def call(conn, {:error, :direct_room}),
     do: error(conn, :unprocessable_entity, "direct rooms always have their two members")
 

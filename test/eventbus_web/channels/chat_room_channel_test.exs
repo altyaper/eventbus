@@ -342,4 +342,59 @@ defmodule EventbusWeb.ChatRoomChannelTest do
       assert_reply ref, :error, %{reason: "invalid"}
     end
   end
+
+  describe "edit, delete, replies and reactions" do
+    setup %{ann: ann, bo: bo, room: room} do
+      message = message_fixture(ann, room, %{"text" => "original"})
+      {:ok, _, ann_socket} = join_room(ann, room)
+      {:ok, _, bo_socket} = join_room(bo, room)
+      %{message: message, ann_socket: ann_socket, bo_socket: bo_socket}
+    end
+
+    test "the author edits; others are forbidden", %{message: message} = ctx do
+      id = message.id
+      ref = push(ctx.ann_socket, "message:edit", %{"id" => id, "text" => "fixed"})
+      assert_reply ref, :ok, %{message: %{id: ^id, text: "fixed", edited_at: %DateTime{}}}
+      assert_push "chat.message.updated", %{message: %{id: ^id, text: "fixed"}}
+
+      ref = push(ctx.bo_socket, "message:edit", %{"id" => id, "text" => "hijack"})
+      assert_reply ref, :error, %{reason: "forbidden"}
+    end
+
+    test "the author deletes; others are forbidden", %{message: message} = ctx do
+      id = message.id
+      ref = push(ctx.bo_socket, "message:delete", %{"id" => id})
+      assert_reply ref, :error, %{reason: "forbidden"}
+
+      ref = push(ctx.ann_socket, "message:delete", %{"id" => id})
+      assert_reply ref, :ok, %{message: %{id: ^id, text: "", deleted_at: %DateTime{}}}
+      assert_push "chat.message.deleted", %{message: %{id: ^id}}
+    end
+
+    test "replies carry a preview", %{message: message} = ctx do
+      ref =
+        push(ctx.bo_socket, "message:send", %{"text" => "re", "reply_to_id" => message.id})
+
+      assert_reply ref, :ok, %{message: %{reply_to: %{text: "original", sender: %{id: "ann"}}}}
+    end
+
+    test "reactions are added, deduplicated and removed", %{message: message} = ctx do
+      id = message.id
+      ref = push(ctx.bo_socket, "reaction:add", %{"message_id" => id, "emoji" => "👍"})
+      assert_reply ref, :ok
+      assert_push "chat.reaction.added", %{message_id: ^id, user_id: "bo", emoji: "👍"}
+      assert_push "chat.reaction.added", _
+
+      ref = push(ctx.bo_socket, "reaction:add", %{"message_id" => id, "emoji" => "👍"})
+      assert_reply ref, :ok
+      refute_push "chat.reaction.added", _
+
+      ref = push(ctx.bo_socket, "reaction:remove", %{"message_id" => id, "emoji" => "👍"})
+      assert_reply ref, :ok
+      assert_push "chat.reaction.removed", %{user_id: "bo"}
+
+      ref = push(ctx.bo_socket, "reaction:add", %{"message_id" => id, "emoji" => "nope"})
+      assert_reply ref, :error, %{reason: "invalid"}
+    end
+  end
 end

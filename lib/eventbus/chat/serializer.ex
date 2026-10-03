@@ -25,6 +25,12 @@ defmodule Eventbus.Chat.Serializer do
     }
   end
 
+  @doc """
+  The full message: sender, a preview of the message it replies to, and its
+  reactions as `[%{emoji, count, user_ids}]` in the order they were first
+  used. Deleted messages keep their place but lose text, metadata and
+  reactions. Needs `Eventbus.Chat.Messages.preloads/0`.
+  """
   def message(%Message{sender: %User{} = sender} = message) do
     deleted? = not is_nil(message.deleted_at)
 
@@ -34,13 +40,35 @@ defmodule Eventbus.Chat.Serializer do
       sender: user(sender),
       text: if(deleted?, do: "", else: message.text),
       metadata: if(deleted?, do: %{}, else: message.metadata),
-      reply_to: nil,
+      reply_to: reply_to(message.reply_to),
       client_ref: message.client_ref,
-      reactions: [],
+      reactions: if(deleted?, do: [], else: reactions(message.reactions)),
       edited_at: message.edited_at,
       deleted_at: message.deleted_at,
       inserted_at: message.inserted_at
     }
+  end
+
+  defp reply_to(nil), do: nil
+
+  defp reply_to(%Message{sender: %User{} = sender} = message) do
+    deleted? = not is_nil(message.deleted_at)
+
+    %{
+      id: message.id,
+      sender: user(sender),
+      text: if(deleted?, do: "", else: String.slice(message.text, 0, 140)),
+      deleted: deleted?
+    }
+  end
+
+  defp reactions(reactions) when is_list(reactions) do
+    reactions
+    |> Enum.group_by(& &1.emoji)
+    |> Enum.sort_by(fn {_emoji, [first | _]} -> first.id end)
+    |> Enum.map(fn {emoji, group} ->
+      %{emoji: emoji, count: length(group), user_ids: Enum.map(group, & &1.user.external_id)}
+    end)
   end
 
   @doc """

@@ -2,7 +2,8 @@ defmodule EventbusWeb.ChatRoomLive do
   @moduledoc """
   One chat room inside its app, for the admin: its members and its message
   history, newest first, and who's online, updated live from the same events
-  chat clients get. Managing members is superadmin-only.
+  chat clients get. Managing members and deleting messages (moderation) are
+  superadmin-only.
   """
 
   use EventbusWeb, :live_view
@@ -92,6 +93,18 @@ defmodule EventbusWeb.ChatRoomLive do
     end
   end
 
+  def handle_event("delete_message", %{"id" => id}, socket) do
+    %{app: app, room: room} = socket.assigns
+
+    with {id, ""} <- Integer.parse(id),
+         {:ok, _message, events} <- Messages.delete_message_as_app(app, room, id) do
+      # The deleted event updates the message in place.
+      Broadcast.dispatch(app, events)
+    end
+
+    {:noreply, socket}
+  end
+
   def handle_event("remove_member", %{"user-id" => user_id}, socket) do
     %{app: app, room: room} = socket.assigns
 
@@ -111,6 +124,19 @@ defmodule EventbusWeb.ChatRoomLive do
      socket
      |> update(:messages_count, &(&1 + 1))
      |> stream_insert(:messages, message, at: 0)}
+  end
+
+  def handle_info({:chat_event, event, %{message: message}}, socket)
+      when event in ["chat.message.updated", "chat.message.deleted"] do
+    {:noreply, stream_insert(socket, :messages, message)}
+  end
+
+  # Reaction events only name the message, so reload that one message.
+  def handle_info({:chat_event, "chat.reaction." <> _, %{message_id: id}}, socket) do
+    case Messages.get_room_message(socket.assigns.room, id) do
+      nil -> {:noreply, socket}
+      message -> {:noreply, stream_insert(socket, :messages, Serializer.message(message))}
+    end
   end
 
   def handle_info({:chat_event, "chat.member.joined", %{member: member}}, socket) do
@@ -225,6 +251,18 @@ defmodule EventbusWeb.ChatRoomLive do
                       {format_time(message.inserted_at)}
                     </time>
                   </p>
+                  <p
+                    :if={message.reply_to}
+                    class="mt-0.5 flex min-w-0 items-center gap-1 border-l-2 border-base-content/15 pl-2 text-xs text-base-content/50"
+                  >
+                    <.icon name="hero-arrow-uturn-left-micro" class="size-3 shrink-0" />
+                    <span class="shrink-0 font-medium">{message.reply_to.sender.display_name}</span>
+                    <span class="truncate">
+                      {if message.reply_to.deleted,
+                        do: "deleted message",
+                        else: message.reply_to.text}
+                    </span>
+                  </p>
                   <%= if message.deleted_at do %>
                     <p class="text-sm italic text-base-content/40">This message was deleted</p>
                   <% else %>
@@ -234,8 +272,29 @@ defmodule EventbusWeb.ChatRoomLive do
                         class="ml-1 text-xs text-base-content/40"
                       >(edited)</span>
                     </p>
+                    <div :if={message.reactions != []} class="mt-1 flex flex-wrap gap-1">
+                      <span
+                        :for={reaction <- message.reactions}
+                        title={Enum.join(reaction.user_ids, ", ")}
+                        class="inline-flex items-center gap-1 rounded-full bg-base-content/5 px-1.5 py-0.5 text-xs tabular-nums"
+                      >
+                        {reaction.emoji} {reaction.count}
+                      </span>
+                    </div>
                   <% end %>
                 </div>
+                <button
+                  :if={@superadmin? and is_nil(message.deleted_at)}
+                  id={"#{id}-delete"}
+                  type="button"
+                  phx-click="delete_message"
+                  phx-value-id={message.id}
+                  data-confirm="Delete this message for everyone?"
+                  class="self-start rounded-md p-1 text-base-content/30 opacity-0 transition-all hover:bg-error/10 hover:text-error group-hover:opacity-100 focus:opacity-100"
+                  aria-label="Delete message"
+                >
+                  <.icon name="hero-trash-micro" class="size-4" />
+                </button>
               </li>
             </ol>
             <button

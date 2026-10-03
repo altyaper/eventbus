@@ -1,7 +1,8 @@
 defmodule EventbusWeb.ChatRoomController do
   @moduledoc """
   The server-side chat API, for an app's backend: create rooms, manage their
-  members and send messages as one of its users (e.g. a bot). Users are named
+  members, send messages as one of its users (e.g. a bot) and delete any
+  message (moderation). Users are named
   by the app's external ids and created on first mention.
   """
 
@@ -67,13 +68,25 @@ defmodule EventbusWeb.ChatRoomController do
   def create_message(%{assigns: %{current_app: app}} = conn, %{"room_id" => room_id} = params) do
     with {:ok, room} <- fetch_room(app, room_id),
          %User{} = user <- Users.get_user(app, params["user_id"]) || {:error, :not_found},
-         attrs = Map.take(params, ["text", "client_ref", "metadata"]),
+         attrs = Map.take(params, ["text", "client_ref", "metadata", "reply_to_id"]),
          {:ok, message, events} <- Messages.send_message(Caller.new(app, user), room, attrs) do
       Broadcast.dispatch(app, events)
 
       conn
       |> put_status(if events == [], do: :ok, else: :created)
       |> json(%{message: Serializer.message(message)})
+    end
+  end
+
+  def delete_message(%{assigns: %{current_app: app}} = conn, %{"room_id" => room_id, "id" => id}) do
+    with {:ok, room} <- fetch_room(app, room_id),
+         {id, ""} <- Integer.parse(id),
+         {:ok, message, events} <- Messages.delete_message_as_app(app, room, id) do
+      Broadcast.dispatch(app, events)
+      json(conn, %{message: Serializer.message(message)})
+    else
+      {:error, _reason} = error -> error
+      _not_an_id -> {:error, :not_found}
     end
   end
 

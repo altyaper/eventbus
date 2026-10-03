@@ -4,7 +4,7 @@ defmodule Eventbus.Chat.MessagesTest do
   import Eventbus.ApplicationsFixtures
   import Eventbus.ChatFixtures
 
-  alias Eventbus.Chat.{Messages, Room}
+  alias Eventbus.Chat.{Messages, Room, Serializer}
   alias Eventbus.Repo
 
   setup do
@@ -128,6 +128,123 @@ defmodule Eventbus.Chat.MessagesTest do
     test "doesn't mix rooms", %{app: app, caller: caller} do
       other = room_fixture(app, %{}, [caller.user])
       assert %{messages: [], has_more: false} = Messages.list_messages(other)
+    end
+  end
+
+  describe "replies" do
+    test "a reply carries a preview of the original", %{caller: caller, room: room} do
+      original = message_fixture(caller, room, %{"text" => "Are we deploying today?"})
+
+      {:ok, reply, _} =
+        Messages.send_message(caller, room, %{"text" => "Yes", "reply_to_id" => original.id})
+
+      assert %{
+               reply_to: %{
+                 id: id,
+                 sender: %{id: "ann"},
+                 text: "Are we deploying today?",
+                 deleted: false
+               }
+             } =
+               Serializer.message(reply)
+
+      assert id == original.id
+    end
+
+    test "must point at a live message of the same room", %{app: app, caller: caller, room: room} do
+      other_room = room_fixture(app, %{}, [caller.user])
+      elsewhere = message_fixture(caller, other_room)
+      deleted = message_fixture(caller, room)
+      {:ok, _, _} = Messages.delete_message(caller, room, deleted.id)
+
+      for id <- [elsewhere.id, deleted.id, -1] do
+        assert {:error, changeset} =
+                 Messages.send_message(caller, room, %{"text" => "hi", "reply_to_id" => id})
+
+        assert "must be a message in this room" in errors_on(changeset).reply_to_id
+      end
+    end
+
+    test "replies to a message deleted later show it as deleted", %{caller: caller, room: room} do
+      original = message_fixture(caller, room, %{"text" => "secret"})
+      reply = message_fixture(caller, room, %{"text" => "re", "reply_to_id" => original.id})
+      {:ok, _, _} = Messages.delete_message(caller, room, original.id)
+
+      assert %{reply_to: %{deleted: true, text: ""}} =
+               Serializer.message(Messages.get_room_message(room, reply.id))
+    end
+  end
+
+  describe "edit_message/4" do
+    test "the author edits; the event carries the new text", %{caller: caller, room: room} do
+      message = message_fixture(caller, room)
+
+      {:ok, edited, [{:room, _, "chat.message.updated", %{message: payload}}]} =
+        Messages.edit_message(caller, room, message.id, %{"text" => " new "})
+
+      assert edited.text == "new"
+      assert edited.edited_at
+      assert payload.text == "new"
+    end
+
+    test "others are forbidden, even moderators", %{app: app, caller: caller, room: room} do
+      message = message_fixture(caller, room)
+      {:ok, _, _} = Eventbus.Chat.Rooms.add_member(app, room, "mod", "moderator")
+      mod = Eventbus.Chat.Caller.new(app, Eventbus.Chat.Users.get_user(app, "mod"))
+
+      assert {:error, :forbidden} = Messages.edit_message(mod, room, message.id, %{"text" => "x"})
+    end
+
+    test "missing, deleted or invalid", %{caller: caller, room: room} do
+      message = message_fixture(caller, room)
+
+      assert {:error, changeset} =
+               Messages.edit_message(caller, room, message.id, %{"text" => ""})
+
+      assert errors_on(changeset).text
+      assert {:error, :not_found} = Messages.edit_message(caller, room, -1, %{"text" => "x"})
+
+      {:ok, _, _} = Messages.delete_message(caller, room, message.id)
+
+      assert {:error, :not_found} =
+               Messages.edit_message(caller, room, message.id, %{"text" => "x"})
+    end
+  end
+
+  describe "delete_message/3" do
+    test "the author deletes softly, once", %{caller: caller, room: room} do
+      message = message_fixture(caller, room, %{"text" => "oops", "metadata" => %{"a" => 1}})
+
+      {:ok, deleted, [{:room, _, "chat.message.deleted", %{message: payload}}]} =
+        Messages.delete_message(caller, room, message.id)
+
+      assert deleted.deleted_at
+      assert %{text: "", metadata: %{}, deleted_at: %DateTime{}} = payload
+      assert {:ok, _, []} = Messages.delete_message(caller, room, message.id)
+      # Still in the history, in place.
+      assert [%{id: id}] = Messages.list_messages(room).messages
+      assert id == message.id
+    end
+
+    test "moderators may delete anyone's; members may not", %{
+      app: app,
+      caller: caller,
+      room: room
+    } do
+      message = message_fixture(caller, room)
+      {:ok, _, _} = Eventbus.Chat.Rooms.add_member(app, room, "bo")
+      {:ok, _, _} = Eventbus.Chat.Rooms.add_member(app, room, "mod", "moderator")
+      bo = Eventbus.Chat.Caller.new(app, Eventbus.Chat.Users.get_user(app, "bo"))
+      mod = Eventbus.Chat.Caller.new(app, Eventbus.Chat.Users.get_user(app, "mod"))
+
+      assert {:error, :forbidden} = Messages.delete_message(bo, room, message.id)
+      assert {:ok, _, [_]} = Messages.delete_message(mod, room, message.id)
+    end
+
+    test "the app may delete any message of its rooms", %{app: app, caller: caller, room: room} do
+      message = message_fixture(caller, room)
+      assert {:ok, _, [_]} = Messages.delete_message_as_app(app, room, message.id)
+      assert {:error, :not_found} = Messages.delete_message_as_app(app, room, -1)
     end
   end
 end

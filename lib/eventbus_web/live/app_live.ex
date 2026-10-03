@@ -11,7 +11,7 @@ defmodule EventbusWeb.AppLive do
   import EventbusWeb.AppComponents
 
   alias Eventbus.{Applications, Origins, Topics}
-  alias Eventbus.Chat.{Broadcast, Rooms}
+  alias Eventbus.Chat.{Broadcast, Rooms, Users}
   alias Eventbus.Accounts.Scope
   alias Eventbus.Origins.AllowedOrigin
 
@@ -190,7 +190,12 @@ defmodule EventbusWeb.AppLive do
   end
 
   def handle_event("delete_app", _params, socket) do
+    chat_user_ids = Users.list_user_ids(socket.assigns.app)
     {:ok, app} = Applications.delete_app(socket.assigns.app)
+
+    # Their tokens already stop working; this closes sockets that are open.
+    for id <- chat_user_ids,
+        do: EventbusWeb.Endpoint.broadcast("chat_socket:#{id}", "disconnect", %{})
 
     {:noreply,
      socket
@@ -743,7 +748,7 @@ defmodule EventbusWeb.AppLive do
         <div>
           <p class="font-medium">Delete this application</p>
           <p class="text-sm text-base-content/50">
-            Deletes its topics and origins. Its credentials stop working immediately.
+            Deletes its topics, origins and chat. Its credentials and chat tokens stop working immediately.
           </p>
         </div>
         <button
