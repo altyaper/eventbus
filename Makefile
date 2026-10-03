@@ -22,6 +22,10 @@ API_KEY      ?= dev-secret
 TOPIC        ?= example
 PAYLOAD      ?= {"hello":"world"}
 
+# Docker Hub image `make docker-push` publishes (must match docker-compose.yml)
+IMAGE        ?= jorgechavzns/eventbus
+TAG          ?= latest
+
 # Only present on machines building behind a TLS-intercepting corporate
 # proxy. Must be the full trust bundle (root + intercepting CA), not just
 # the intercepting cert alone — see Dockerfile for why `docker-build`
@@ -33,7 +37,7 @@ EXTRA_CA_SRC ?= $(HOME)/.cache/elixir-ca/os-trust.crt
         db-create db-migrate db-rollback db-reset db-status db-console \
         db-up db-down db-stop db-logs \
         build test format check routes publish clean \
-        docker-build docker-up docker-down docker-logs docker-ps
+        docker-build docker-up docker-down docker-logs docker-ps docker-push
 
 ## ---------------------------------------------------------------------------
 ## Help
@@ -146,10 +150,11 @@ clean: ## Remove build output and caches
 ## Docker (full app + its own Postgres, see docker-compose.yml)
 ## ---------------------------------------------------------------------------
 
-# Something in this machine's environment sets DOCKER_DEFAULT_PLATFORM=
-# linux/amd64 outside any dotfile we could find, which silently builds under
-# Rosetta emulation on this arm64 Mac and causes flaky BEAM JIT crashes.
-# Force native arch here regardless of that ambient setting.
+# The Bloomberg bootstrap's ~/.lcldevrc (managed, sourced from ~/.zshrc)
+# exports DOCKER_DEFAULT_PLATFORM=linux/amd64, which silently builds under
+# Rosetta emulation on this arm64 Mac and causes flaky BEAM crashes (e.g.
+# "module Eventbus.MixProject is already compiled" in deps.compile). Force
+# native arch here regardless — plain `docker compose` doesn't get this.
 DOCKER_DEFAULT_PLATFORM := linux/arm64
 export DOCKER_DEFAULT_PLATFORM
 
@@ -157,6 +162,11 @@ docker-build: ## Build the app image (stages an extra CA cert if present, see Do
 	@test -f "$(EXTRA_CA_SRC)" && cp "$(EXTRA_CA_SRC)" docker/extra-ca.crt \
 		|| rm -f docker/extra-ca.crt
 	docker compose build
+
+docker-push: ## Build for arm64 (the Pi) and push to Docker Hub as $(IMAGE):$(TAG) — needs `docker login`
+	@test -f "$(EXTRA_CA_SRC)" && cp "$(EXTRA_CA_SRC)" docker/extra-ca.crt \
+		|| rm -f docker/extra-ca.crt
+	docker buildx build --platform $(DOCKER_DEFAULT_PLATFORM) -t $(IMAGE):$(TAG) --push .
 
 docker-up: docker-build ## Build and start the app + its own Postgres (needs .env, see docker.env.example)
 	docker compose up -d
