@@ -17,7 +17,7 @@ defmodule EventbusWeb.TopicsLiveTest do
 
     html =
       live
-      |> form("form", topic: %{name: "a-new-topic"})
+      |> form("#topic-form", topic: %{name: "a-new-topic"})
       |> render_submit()
 
     assert html =~ "a-new-topic"

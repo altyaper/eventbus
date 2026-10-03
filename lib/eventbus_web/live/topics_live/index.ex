@@ -6,49 +6,168 @@ defmodule EventbusWeb.TopicsLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
+    topics = Topics.list_topics() |> Enum.sort_by(& &1.inserted_at, {:desc, DateTime})
+
     {:ok,
      socket
      |> assign(:page_title, "Topics")
      |> assign(:form, to_form(Topics.change_topic(%Topic{})))
-     |> assign(:topics, Topics.list_topics())}
+     |> assign(:topics_count, length(topics))
+     |> assign(:curl_example, curl_example())
+     |> stream(:topics, topics)}
   end
 
   @impl true
+  def handle_event("validate", %{"topic" => topic_params}, socket) do
+    changeset = Topics.change_topic(%Topic{}, topic_params)
+    {:noreply, assign(socket, :form, to_form(changeset, action: :validate))}
+  end
+
   def handle_event("create", %{"topic" => topic_params}, socket) do
     case Topics.create_topic(topic_params) do
-      {:ok, _topic} ->
+      {:ok, topic} ->
         {:noreply,
          socket
          |> assign(:form, to_form(Topics.change_topic(%Topic{})))
-         |> assign(:topics, Topics.list_topics())}
+         |> update(:topics_count, &(&1 + 1))
+         |> stream_insert(:topics, topic, at: 0)}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset))}
     end
   end
 
+  defp curl_example do
+    """
+    curl -X POST #{url(~p"/api/topics/my.topic/events")} \\
+      -H "Authorization: Bearer $EVENTBUS_API_KEY" \\
+      -H "Content-Type: application/json" \\
+      -d '{"hello": "world"}'\
+    """
+  end
+
+  defp format_date(datetime), do: Calendar.strftime(datetime, "%b %-d, %Y · %H:%M UTC")
+
   @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <.header>
-        Topics
-        <:subtitle>Create a topic, then click one to start listening.</:subtitle>
-      </.header>
+      <section id="hero" class="mb-10 sm:mb-14">
+        <span class="inline-flex items-center gap-2 rounded-full border border-base-content/10 bg-base-100/60 px-3 py-1 text-xs font-medium text-base-content/70">
+          <span class="relative flex size-2">
+            <span class="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60" />
+            <span class="relative inline-flex size-2 rounded-full bg-success" />
+          </span>
+          Real-time pub/sub over HTTP &amp; WebSockets
+        </span>
+        <h1 class="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
+          Topics
+        </h1>
+        <p class="mt-2 max-w-xl text-base-content/60">
+          Publish JSON events to a topic and every listener receives them instantly.
+          Pick a topic to watch its stream live.
+        </p>
+      </section>
 
-      <.form for={@form} phx-submit="create" class="flex items-end gap-2 mt-6">
-        <.input field={@form[:name]} label="New topic name" placeholder="changologs.logs" />
-        <.button variant="primary">Create</.button>
-      </.form>
+      <div class="grid gap-8 lg:grid-cols-3">
+        <section class="lg:col-span-2">
+          <div class="mb-4 flex items-baseline justify-between">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-base-content/50">
+              All topics
+            </h2>
+            <span id="topics-count" class="text-sm tabular-nums text-base-content/50">
+              {@topics_count} {if @topics_count == 1, do: "topic", else: "topics"}
+            </span>
+          </div>
 
-      <.table
-        id="topics"
-        rows={@topics}
-        row_click={fn topic -> JS.navigate(~p"/topics/#{topic.name}") end}
-      >
-        <:col :let={topic} label="Name">{topic.name}</:col>
-        <:col :let={topic} label="Created">{topic.inserted_at}</:col>
-      </.table>
+          <ul id="topics" phx-update="stream" class="grid gap-3 sm:grid-cols-2">
+            <li
+              id="topics-empty"
+              class="hidden only:flex flex-col items-center rounded-2xl border border-dashed border-base-content/15 px-6 py-14 text-center sm:col-span-2"
+            >
+              <span class="grid size-12 place-items-center rounded-full bg-base-content/5">
+                <.icon name="hero-inbox-stack" class="size-6 text-base-content/40" />
+              </span>
+              <p class="mt-4 font-medium">No topics yet</p>
+              <p class="mt-1 text-sm text-base-content/50">
+                Create one on the right, or just publish to a new name — it's created on first use.
+              </p>
+            </li>
+            <li :for={{id, topic} <- @streams.topics} id={id}>
+              <.link
+                navigate={~p"/topics/#{topic.name}"}
+                class="group flex h-full items-center gap-4 rounded-2xl border border-base-content/10 bg-base-100 p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md hover:shadow-primary/5"
+              >
+                <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-content">
+                  <.icon name="hero-signal" class="size-5" />
+                </span>
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate font-mono text-sm font-medium">{topic.name}</span>
+                  <span class="mt-0.5 block text-xs text-base-content/50">
+                    Created {format_date(topic.inserted_at)}
+                  </span>
+                </span>
+                <.icon
+                  name="hero-arrow-right"
+                  class="size-4 shrink-0 text-base-content/30 transition-all group-hover:translate-x-0.5 group-hover:text-primary"
+                />
+              </.link>
+            </li>
+          </ul>
+        </section>
+
+        <aside class="space-y-6">
+          <div class="rounded-2xl border border-base-content/10 bg-base-100 p-5 shadow-sm">
+            <h2 class="flex items-center gap-2 font-semibold">
+              <.icon name="hero-plus-circle" class="size-5 text-primary" /> New topic
+            </h2>
+            <p class="mt-1 text-sm text-base-content/50">
+              Lowercase letters, digits, <code class="font-mono">.</code>
+              <code class="font-mono">-</code>
+              <code class="font-mono">_</code>
+            </p>
+            <.form
+              for={@form}
+              id="topic-form"
+              phx-change="validate"
+              phx-submit="create"
+              class="mt-4"
+            >
+              <.input
+                field={@form[:name]}
+                placeholder="changologs.logs"
+                autocomplete="off"
+                phx-debounce="300"
+              />
+              <button
+                id="create-topic"
+                type="submit"
+                class="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-content shadow-sm transition-all hover:brightness-110 active:scale-[0.98] phx-submit-loading:opacity-60"
+              >
+                Create topic
+              </button>
+            </.form>
+          </div>
+
+          <div class="rounded-2xl border border-base-content/10 bg-base-100 p-5 shadow-sm">
+            <h2 class="flex items-center gap-2 font-semibold">
+              <.icon name="hero-command-line" class="size-5 text-primary" /> Quick start
+            </h2>
+            <p class="mt-1 text-sm text-base-content/50">
+              Publish over HTTP with your API key:
+            </p>
+            <pre
+              id="curl-example"
+              class="mt-3 whitespace-pre-wrap break-all rounded-lg bg-neutral p-3 font-mono text-xs leading-relaxed text-neutral-content"
+            >{@curl_example}</pre>
+            <p class="mt-3 text-sm text-base-content/50">
+              Or join <code class="font-mono text-base-content/80">topic:&lt;name&gt;</code>
+              on the <code class="font-mono text-base-content/80">/socket</code>
+              WebSocket to listen and publish.
+            </p>
+          </div>
+        </aside>
+      </div>
     </Layouts.app>
     """
   end

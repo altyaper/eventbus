@@ -35,38 +35,39 @@ defmodule EventbusWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <header class="navbar px-4 sm:px-6 lg:px-8">
-      <div class="flex-1">
-        <a href="/" class="flex-1 flex w-fit items-center gap-2">
-          <img src={~p"/images/logo.svg"} width="36" />
-          <span class="text-sm font-semibold">v{Application.spec(:phoenix, :vsn)}</span>
-        </a>
-      </div>
-      <div class="flex-none">
-        <ul class="flex flex-column px-1 space-x-4 items-center">
-          <li>
-            <a href="https://phoenixframework.org/" class="btn btn-ghost">Website</a>
-          </li>
-          <li>
-            <a href="https://github.com/phoenixframework/phoenix" class="btn btn-ghost">GitHub</a>
-          </li>
-          <li>
-            <.theme_toggle />
-          </li>
-          <li>
-            <a href="https://phoenix.hexdocs.pm/overview.html" class="btn btn-primary">
-              Get Started <span aria-hidden="true">&rarr;</span>
-            </a>
-          </li>
-        </ul>
-      </div>
-    </header>
+    <div class="relative min-h-screen overflow-hidden">
+      <div
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-x-0 -top-40 -z-10 h-[28rem] bg-gradient-to-b from-primary/15 via-primary/5 to-transparent blur-2xl"
+      />
 
-    <main class="px-4 py-20 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-2xl space-y-4">
-        {render_slot(@inner_block)}
-      </div>
-    </main>
+      <header class="sticky top-0 z-20 border-b border-base-content/5 bg-base-100/70 backdrop-blur-md">
+        <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <.link navigate={~p"/"} id="brand" class="group flex items-center gap-2.5">
+            <span class="grid size-8 place-items-center rounded-lg bg-gradient-to-br from-primary to-accent text-primary-content shadow-sm shadow-primary/30 transition-transform duration-300 group-hover:rotate-6 group-hover:scale-105">
+              <.icon name="hero-bolt-solid" class="size-4" />
+            </span>
+            <span class="text-base font-semibold tracking-tight">eventbus</span>
+          </.link>
+
+          <nav class="flex items-center gap-2 sm:gap-4">
+            <.link
+              navigate={~p"/"}
+              class="rounded-md px-3 py-1.5 text-sm font-medium text-base-content/70 transition-colors hover:bg-base-content/5 hover:text-base-content"
+            >
+              Topics
+            </.link>
+            <.theme_toggle />
+          </nav>
+        </div>
+      </header>
+
+      <main class="px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+        <div class="mx-auto max-w-6xl">
+          {render_slot(@inner_block)}
+        </div>
+      </main>
+    </div>
 
     <.flash_group flash={@flash} />
     """

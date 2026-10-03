@@ -60,34 +60,36 @@ defmodule EventbusWeb.TopicShowLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <.header>
-        {@name}
-        <:subtitle>
-          <.link navigate={~p"/"}>&larr; All topics</.link>
-        </:subtitle>
-        <:actions>
-          <.button phx-click="toggle_listening" variant="primary">
-            {if @listening, do: "Stop listening", else: "Start listening"}
-          </.button>
-        </:actions>
-      </.header>
+      <div class="mx-auto max-w-3xl">
+        <.header>
+          {@name}
+          <:subtitle>
+            <.link navigate={~p"/"}>&larr; All topics</.link>
+          </:subtitle>
+          <:actions>
+            <.button phx-click="toggle_listening" variant="primary">
+              {if @listening, do: "Stop listening", else: "Start listening"}
+            </.button>
+          </:actions>
+        </.header>
 
-      <.form for={@form} phx-submit="publish_test" class="flex items-end gap-2 mt-6">
-        <.input
-          field={@form[:payload]}
-          label="Publish a test event (JSON)"
-          placeholder={~s({"hello": "world"})}
-        />
-        <.button>Publish</.button>
-      </.form>
+        <.form for={@form} phx-submit="publish_test" class="flex items-end gap-2 mt-6">
+          <.input
+            field={@form[:payload]}
+            label="Publish a test event (JSON)"
+            placeholder={~s({"hello": "world"})}
+          />
+          <.button>Publish</.button>
+        </.form>
 
-      <div class="mt-6 space-y-2">
-        <p :if={@events == []} class="text-base-content/60">
-          {if @listening, do: "Waiting for events...", else: "Not listening."}
-        </p>
-        <div :for={event <- @events} class="rounded-box bg-base-200 p-3">
-          <div class="text-xs text-base-content/60">{event["published_at"]}</div>
-          <pre class="text-sm whitespace-pre-wrap">{Jason.encode!(event["payload"], pretty: true)}</pre>
+        <div class="mt-6 space-y-2">
+          <p :if={@events == []} class="text-base-content/60">
+            {if @listening, do: "Waiting for events...", else: "Not listening."}
+          </p>
+          <div :for={event <- @events} class="rounded-box bg-base-200 p-3">
+            <div class="text-xs text-base-content/60">{event["published_at"]}</div>
+            <pre class="text-sm whitespace-pre-wrap">{Jason.encode!(event["payload"], pretty: true)}</pre>
+          </div>
         </div>
       </div>
     </Layouts.app>
