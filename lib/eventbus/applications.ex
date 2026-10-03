@@ -58,9 +58,15 @@ defmodule Eventbus.Applications do
   end
 
   @doc """
-  Deletes the application and, through the foreign key, all its topics.
+  Deletes the application and, through the foreign keys, all its topics and
+  allowed origins.
   """
-  def delete_app(%App{} = app), do: Repo.delete(app)
+  def delete_app(%App{} = app) do
+    with {:ok, app} <- Repo.delete(app) do
+      Eventbus.Origins.refresh_cache()
+      {:ok, app}
+    end
+  end
 
   @doc """
   Returns `{:ok, app}` when the client id and secret match, `:error`

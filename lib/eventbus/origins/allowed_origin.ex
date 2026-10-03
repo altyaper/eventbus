@@ -1,4 +1,8 @@
 defmodule Eventbus.Origins.AllowedOrigin do
+  @moduledoc """
+  An origin whose web pages may listen to one application's topics.
+  """
+
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -6,20 +10,25 @@ defmodule Eventbus.Origins.AllowedOrigin do
 
   schema "allowed_origins" do
     field :origin, :string
+    belongs_to :application, Eventbus.Applications.App
 
     timestamps(type: :utc_datetime)
   end
 
   @doc """
   Validates the origin and stores it in canonical form, so `HTTPS://X.com/`
-  and `https://x.com` are the same row.
+  and `https://x.com` are the same row. `application_id` is set by the
+  caller, not cast.
   """
   def changeset(allowed_origin, attrs) do
     allowed_origin
     |> cast(attrs, [:origin])
     |> validate_required([:origin])
     |> canonicalize_origin()
-    |> unique_constraint(:origin, message: "is already allowed")
+    |> unique_constraint(:origin,
+      name: :allowed_origins_application_id_origin_index,
+      message: "is already allowed"
+    )
   end
 
   defp canonicalize_origin(changeset) do

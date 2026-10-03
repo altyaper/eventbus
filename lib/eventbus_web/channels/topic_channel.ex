@@ -5,18 +5,26 @@ defmodule EventbusWeb.TopicChannel do
 
   Joining doesn't create a topic row, so anonymous sockets can't add topics;
   listening works before a topic exists because delivery is PubSub-only.
+
+  Browser sockets may only join topics of an app that allows their origin
+  (or any topic, from an env origin); see `Eventbus.Origins`.
   """
 
   use Phoenix.Channel
 
-  alias Eventbus.Topics
+  alias Eventbus.{Origins, Topics}
 
   @impl true
   def join("topic:" <> name, _params, socket) do
-    if Topics.valid_name?(name) do
-      {:ok, assign(socket, :topic_name, name)}
-    else
-      {:error, %{reason: "invalid topic name"}}
+    cond do
+      not Topics.valid_name?(name) ->
+        {:error, %{reason: "invalid topic name"}}
+
+      not Origins.allowed_for_topic?(socket.assigns[:origin], name) ->
+        {:error, %{reason: "origin not allowed"}}
+
+      true ->
+        {:ok, assign(socket, :topic_name, name)}
     end
   end
 

@@ -107,8 +107,9 @@ if config_env() == :prod do
 
   # Origins always allowed to open the LiveView/Channels websockets: PHX_HOST
   # plus any in PHX_EXTRA_ORIGINS (comma-separated), e.g. a public domain
-  # behind a reverse proxy alongside the Pi's LAN IP. The superadmin can allow
-  # more at /settings; see Eventbus.Origins for the pattern format.
+  # behind a reverse proxy alongside the Pi's LAN IP. These may listen to every
+  # app; the superadmin allows more per app, on its Origins page. See
+  # Eventbus.Origins for the pattern format.
   extra_origins =
     System.get_env("PHX_EXTRA_ORIGINS", "")
     |> String.split(",", trim: true)

@@ -5,8 +5,6 @@ defmodule EventbusWeb.Layouts do
   """
   use EventbusWeb, :html
 
-  alias Eventbus.Accounts.Scope
-
   # Embed all files in layouts/* within this module.
   # The default root.html.heex file contains the HTML
   # skeleton of your application, namely HTML headers
@@ -79,8 +77,7 @@ defmodule EventbusWeb.Layouts do
   end
 
   @doc """
-  The logged-in user's menu: username, role, settings (superadmin only)
-  and log out.
+  The logged-in user's menu: username, role and log out.
   """
   attr :current_scope, Eventbus.Accounts.Scope, required: true
 
@@ -117,14 +114,6 @@ defmodule EventbusWeb.Layouts do
           </span>
         </div>
 
-        <.link
-          :if={Scope.superadmin?(@current_scope)}
-          id="settings-link"
-          navigate={~p"/settings"}
-          class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-base-content/70 transition-colors hover:bg-base-content/5 hover:text-base-content"
-        >
-          <.icon name="hero-cog-6-tooth" class="size-4" /> Settings
-        </.link>
         <.link
           id="log-out"
           href={~p"/logout"}

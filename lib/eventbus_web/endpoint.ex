@@ -17,8 +17,10 @@ defmodule EventbusWeb.Endpoint do
     websocket: [connect_info: [session: @session_options]],
     longpoll: [connect_info: [session: @session_options]]
 
+  # The channel checks the browser's origin per app on join, but connect_info
+  # only exposes x-* headers, so EventbusWeb.OriginHeader copies Origin into one.
   socket "/socket", EventbusWeb.UserSocket,
-    websocket: true,
+    websocket: [connect_info: [:x_headers]],
     longpoll: false
 
   # Serve at "/" the static files from "priv/static" directory.
@@ -58,4 +60,8 @@ defmodule EventbusWeb.Endpoint do
   plug Plug.Head
   plug Plug.Session, @session_options
   plug EventbusWeb.Router
+
+  # Must come after `use Phoenix.Endpoint`: it wraps the `call/2` that
+  # Phoenix defines in its own before_compile hook.
+  @before_compile EventbusWeb.OriginHeader
 end
