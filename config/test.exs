@@ -45,3 +45,6 @@ config :eventbus, :api_key, "test-api-key"
 
 # Only in tests, remove the complexity from the password hashing algorithm
 config :bcrypt_elixir, :log_rounds, 1
+
+# Short chat typing timings so expiry tests stay fast
+config :eventbus, chat_typing_ttl_ms: 100, chat_typing_throttle_ms: 50

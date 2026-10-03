@@ -14,7 +14,7 @@ defmodule Eventbus.Chat.Rooms do
   alias Ecto.Multi
   alias Eventbus.Repo
   alias Eventbus.Applications.App
-  alias Eventbus.Chat.{Caller, Member, Message, Room, Serializer, User, Users}
+  alias Eventbus.Chat.{Caller, Member, Message, ReadStates, Room, Serializer, User, Users}
 
   @doc """
   The app's rooms, latest activity first, each with `:members_count`.
@@ -214,10 +214,10 @@ defmodule Eventbus.Chat.Rooms do
 
   @doc """
   The caller's rooms for their sidebar, latest activity first: each as
-  `%{room, last_message, members}`, where `members` is only loaded for
-  direct rooms (to show the other person).
+  `%{room, last_message, members, unread_count}`, where `members` is only
+  loaded for direct rooms (to show the other person).
   """
-  def list_user_rooms(%Caller{user: %User{id: user_id}}) do
+  def list_user_rooms(%Caller{user: %User{id: user_id} = user}) do
     rooms =
       Repo.all(
         from r in Room,
@@ -246,13 +246,25 @@ defmodule Eventbus.Chat.Rooms do
           |> Enum.group_by(& &1.room_id)
       end
 
+    unread = ReadStates.unread_counts(user, Enum.map(rooms, & &1.id))
+
     Enum.map(rooms, fn room ->
       %{
         room: room,
         last_message: last_messages[room.last_message_id],
-        members: Map.get(direct_members, room.id, [])
+        members: Map.get(direct_members, room.id, []),
+        unread_count: Map.get(unread, room.id, 0)
       }
     end)
+  end
+
+  @doc """
+  The users who are members of `room`, e.g. to tell each about activity.
+  """
+  def list_member_users(%Room{id: room_id}) do
+    Repo.all(
+      from u in User, join: m in Member, on: m.chat_user_id == u.id, where: m.room_id == ^room_id
+    )
   end
 
   defp maybe_user(_app, nil), do: {:ok, nil}

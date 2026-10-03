@@ -221,4 +221,125 @@ defmodule EventbusWeb.ChatRoomChannelTest do
     assert_reply ref, :error, %{reason: "not_found"}
     assert Messages.list_messages(room).messages == []
   end
+
+  describe "presence" do
+    test "joining pushes the current state and tracks you", %{ann: ann, bo: bo, room: room} do
+      {:ok, _, _} = join_room(ann, room)
+      assert_push "presence_state", %{}
+      assert_push "presence_diff", %{joins: %{"ann" => _}}
+
+      {:ok, _, _} = join_room(bo, room)
+      assert_push "presence_state", state
+      assert Map.has_key?(state, "ann")
+      assert_push "presence_diff", %{joins: %{"bo" => %{metas: [%{display_name: "Bo"}]}}}
+    end
+
+    test "two connections of one user are one key with two metas", %{ann: ann, room: room} do
+      {:ok, _, _} = join_room(ann, room)
+      {:ok, _, _} = join_room(ann, room)
+
+      topic = Broadcast.room_topic("acme", room.id)
+      assert_push "presence_diff", %{joins: %{"ann" => _}}
+      assert_push "presence_diff", %{joins: %{"ann" => _}}
+      assert %{"ann" => %{metas: [_, _]}} = Eventbus.Chat.Presence.list(topic)
+    end
+
+    test "closing a connection removes it", %{ann: ann, room: room} do
+      {:ok, _, socket} = join_room(ann, room)
+      assert_push "presence_diff", %{joins: %{"ann" => _}}
+
+      Process.unlink(socket.channel_pid)
+      ref = leave(socket)
+      assert_reply ref, :ok
+
+      assert_receive %Phoenix.Socket.Broadcast{
+        event: "presence_diff",
+        payload: %{leaves: %{"ann" => _}}
+      }
+    end
+  end
+
+  describe "typing" do
+    # subscribe_and_join also subscribes this process to the room topic, so
+    # it sees broadcasts the way another member's channel would.
+    setup %{ann: ann, room: room} do
+      {:ok, _, ann_socket} = join_room(ann, room)
+      %{socket: ann_socket}
+    end
+
+    test "starts, throttles and stops", %{socket: socket} do
+      push(socket, "typing", %{"typing" => true})
+      push(socket, "typing", %{"typing" => true})
+      assert_receive {:chat_event, "chat.typing.started", %{user_id: "ann"}}
+      refute_receive {:chat_event, "chat.typing.started", _}, 20
+
+      push(socket, "typing", %{"typing" => false})
+      assert_receive {:chat_event, "chat.typing.stopped", %{user_id: "ann"}}
+      # The typist's own channel doesn't get its typing back.
+      refute_push "chat.typing.started", _
+    end
+
+    # Not async, so changing the throttle can't affect other tests.
+    test "is re-broadcast while it goes on", %{socket: socket} do
+      throttle = Application.fetch_env!(:eventbus, :chat_typing_throttle_ms)
+      Application.put_env(:eventbus, :chat_typing_throttle_ms, 0)
+      on_exit(fn -> Application.put_env(:eventbus, :chat_typing_throttle_ms, throttle) end)
+
+      push(socket, "typing", %{"typing" => true})
+      assert_receive {:chat_event, "chat.typing.started", _}
+      push(socket, "typing", %{"typing" => true})
+      assert_receive {:chat_event, "chat.typing.started", _}
+    end
+
+    test "expires without a refresh", %{socket: socket} do
+      push(socket, "typing", %{"typing" => true})
+      assert_receive {:chat_event, "chat.typing.started", _}
+      assert_receive {:chat_event, "chat.typing.stopped", %{user_id: "ann"}}, 500
+    end
+
+    test "sending a message stops it", %{socket: socket} do
+      push(socket, "typing", %{"typing" => true})
+      assert_receive {:chat_event, "chat.typing.started", _}
+
+      ref = push(socket, "message:send", %{"text" => "done"})
+      assert_reply ref, :ok, _
+      assert_receive {:chat_event, "chat.typing.stopped", _}, 50
+    end
+
+    test "leaving stops it", %{socket: socket} do
+      push(socket, "typing", %{"typing" => true})
+      assert_receive {:chat_event, "chat.typing.started", _}
+
+      Process.unlink(socket.channel_pid)
+      leave(socket)
+      assert_receive {:chat_event, "chat.typing.stopped", _}, 50
+    end
+  end
+
+  describe "read" do
+    test "marks read, replies and tells the user's channel", %{ann: ann, bo: bo, room: room} do
+      message = message_fixture(bo, room)
+      {:ok, reply, socket} = join_room(ann, room)
+      assert reply.read_state == %{last_read_message_id: nil}
+
+      Phoenix.PubSub.subscribe(Eventbus.PubSub, Broadcast.user_topic("acme", "ann"))
+      ref = push(socket, "read", %{"message_id" => message.id})
+      id = message.id
+      assert_reply ref, :ok, %{last_read_message_id: ^id}
+      assert_receive {:chat_event, "read_state.updated", %{room_id: _, unread_count: 0}}
+
+      assert {:ok, %{read_state: %{last_read_message_id: ^id}}, _} = join_room(ann, room)
+    end
+
+    test "rejects other rooms' messages and bad ids", %{app: app, ann: ann, room: room} do
+      other = room_fixture(app, %{}, [ann.user])
+      message = message_fixture(ann, other)
+      {:ok, _, socket} = join_room(ann, room)
+
+      ref = push(socket, "read", %{"message_id" => message.id})
+      assert_reply ref, :error, %{reason: "not_found"}
+      ref = push(socket, "read", %{"message_id" => "x"})
+      assert_reply ref, :error, %{reason: "invalid"}
+    end
+  end
 end

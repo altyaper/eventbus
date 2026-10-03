@@ -44,15 +44,31 @@ defmodule Eventbus.Chat.Serializer do
   end
 
   @doc """
-  One entry of a user's room list (see `Eventbus.Chat.Rooms.list_user_rooms/1`):
-  the room, its latest message, and for direct rooms both members.
+  A short form of a message for room lists: who, when, and the start of the
+  text.
   """
-  def room_summary(%{room: room, last_message: last_message, members: members}) do
+  def message_preview(%Message{sender: %User{} = sender} = message) do
+    %{
+      id: message.id,
+      sender: user(sender),
+      text: if(message.deleted_at, do: "", else: String.slice(message.text, 0, 140)),
+      deleted: not is_nil(message.deleted_at),
+      inserted_at: message.inserted_at
+    }
+  end
+
+  @doc """
+  One entry of a user's room list (see `Eventbus.Chat.Rooms.list_user_rooms/1`):
+  the room, a preview of its latest message, its unread count, and for
+  direct rooms both members.
+  """
+  def room_summary(%{room: room, last_message: last_message, members: members} = summary) do
     room
     |> room()
     |> Map.merge(%{
-      last_message: last_message && message(last_message),
-      members: Enum.map(members, &member/1)
+      last_message: last_message && message_preview(last_message),
+      members: Enum.map(members, &member/1),
+      unread_count: summary.unread_count
     })
   end
 

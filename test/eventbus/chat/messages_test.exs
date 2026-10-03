@@ -15,7 +15,7 @@ defmodule Eventbus.Chat.MessagesTest do
 
   describe "send_message/3" do
     test "stores the message, bumps the room and returns the event", %{caller: caller, room: room} do
-      {:ok, message, [event]} =
+      {:ok, message, [event | _activity]} =
         Messages.send_message(caller, room, %{"text" => "  hi  ", "metadata" => %{"k" => 1}})
 
       assert message.text == "hi"
@@ -29,11 +29,26 @@ defmodule Eventbus.Chat.MessagesTest do
       assert room.last_message_at == message.inserted_at
     end
 
+    test "tells every member about the activity", %{app: app, caller: caller, room: room} do
+      {:ok, _member, _} = Eventbus.Chat.Rooms.add_member(app, room, "bo")
+
+      {:ok, _message, [_created | activity]} =
+        Messages.send_message(caller, room, %{"text" => String.duplicate("x", 300)})
+
+      assert activity
+             |> Enum.map(fn {:user, user, "room.activity", _} -> user.external_id end)
+             |> Enum.sort() ==
+               ["ann", "bo"]
+
+      [{:user, _, _, %{message: preview}} | _] = activity
+      assert String.length(preview.text) == 140
+    end
+
     test "the same client_ref returns the stored message without events", %{
       caller: caller,
       room: room
     } do
-      {:ok, first, [_]} =
+      {:ok, first, [_ | _]} =
         Messages.send_message(caller, room, %{"text" => "hi", "client_ref" => "r1"})
 
       {:ok, again, []} =

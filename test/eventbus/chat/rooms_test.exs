@@ -145,6 +145,7 @@ defmodule Eventbus.Chat.RoomsTest do
 
     [busy_entry, direct_entry, _] = rooms
     assert busy_entry.last_message.text == "latest"
+    assert busy_entry.unread_count == 1
     assert busy_entry.members == []
     assert direct_entry.last_message == nil
     assert direct_entry.members |> Enum.map(& &1.user.external_id) |> Enum.sort() == ["ann", "bo"]

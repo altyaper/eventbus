@@ -1,8 +1,8 @@
 defmodule EventbusWeb.ChatRoomLive do
   @moduledoc """
   One chat room inside its app, for the admin: its members and its message
-  history, newest first, updated live from the same events chat clients get.
-  Managing members is superadmin-only.
+  history, newest first, and who's online, updated live from the same events
+  chat clients get. Managing members is superadmin-only.
   """
 
   use EventbusWeb, :live_view
@@ -11,7 +11,7 @@ defmodule EventbusWeb.ChatRoomLive do
 
   alias Eventbus.Applications
   alias Eventbus.Accounts.Scope
-  alias Eventbus.Chat.{Broadcast, Member, Messages, Rooms, Serializer}
+  alias Eventbus.Chat.{Broadcast, Member, Messages, Presence, Rooms, Serializer}
 
   @impl true
   def mount(%{"slug" => slug, "id" => id}, _session, socket) do
@@ -32,6 +32,7 @@ defmodule EventbusWeb.ChatRoomLive do
        |> assign(:messages_count, length(page.messages))
        |> assign(:oldest_id, oldest_id(page.messages))
        |> assign(:has_more, page.has_more)
+       |> assign_online()
        |> assign_member_form(%{"user_id" => "", "role" => "member"})
        |> stream_configure(:members, dom_id: &"member-#{&1.user.id}")
        |> stream_configure(:messages, dom_id: &"message-#{&1.id}")
@@ -126,7 +127,23 @@ defmodule EventbusWeb.ChatRoomLive do
      |> stream_delete(:members, member)}
   end
 
+  def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff"}, socket),
+    do: {:noreply, assign_online(socket)}
+
   def handle_info({:chat_event, _name, _payload}, socket), do: {:noreply, socket}
+
+  # Re-listing on each diff is fine at admin scale and avoids merging diffs.
+  defp assign_online(socket) do
+    online =
+      Broadcast.room_topic(socket.assigns.app.slug, socket.assigns.room.id)
+      |> Presence.list()
+      |> Enum.map(fn {user_id, %{metas: [meta | _] = metas}} ->
+        %{id: user_id, display_name: meta.display_name, connections: length(metas)}
+      end)
+      |> Enum.sort_by(& &1.display_name)
+
+    assign(socket, :online, online)
+  end
 
   defp oldest_id([]), do: nil
   defp oldest_id([oldest | _rest]), do: oldest.id
@@ -240,6 +257,23 @@ defmodule EventbusWeb.ChatRoomLive do
               </h3>
               <span id="members-count" class="text-sm tabular-nums text-base-content/50">
                 {@members_count}
+              </span>
+            </div>
+            <div id="online" class="mb-3 flex flex-wrap items-center gap-1.5">
+              <span
+                :if={@online == []}
+                id="online-empty"
+                class="text-xs text-base-content/40"
+              >
+                Nobody connected
+              </span>
+              <span
+                :for={user <- @online}
+                id={"online-#{user.id}"}
+                title={"#{user.connections} #{if user.connections == 1, do: "connection", else: "connections"}"}
+                class="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success"
+              >
+                <span class="size-1.5 rounded-full bg-success"></span>{user.display_name}
               </span>
             </div>
             <ul id="members" phx-update="stream" class="divide-y divide-base-content/5">

@@ -43,6 +43,21 @@ defmodule Eventbus.Chat.Broadcast do
     end)
   end
 
+  @doc """
+  Like `dispatch/2`, but not to the calling process, e.g. so a channel's own
+  typing events don't come back to it.
+  """
+  def dispatch_from(%App{slug: slug}, events) do
+    Enum.each(events, fn {:room, %Room{id: id}, name, payload} ->
+      Phoenix.PubSub.broadcast_from(
+        @pubsub,
+        self(),
+        room_topic(slug, id),
+        {:chat_event, name, payload}
+      )
+    end)
+  end
+
   defp broadcast(topic, name, payload),
     do: Phoenix.PubSub.broadcast(@pubsub, topic, {:chat_event, name, payload})
 end

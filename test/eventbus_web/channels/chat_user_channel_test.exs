@@ -24,7 +24,7 @@ defmodule EventbusWeb.ChatUserChannelTest do
 
     assert {:ok, reply, _socket} = join_user(ann, "chat_user:acme:ann")
     assert reply.user.id == "ann"
-    assert [%{id: id, name: "eng", last_message: %{text: "hey"}}] = reply.rooms
+    assert [%{id: id, name: "eng", last_message: %{text: "hey"}, unread_count: 0}] = reply.rooms
     assert id == room.id
   end
 
@@ -37,6 +37,22 @@ defmodule EventbusWeb.ChatUserChannelTest do
              UserSocket
              |> socket(nil, %{origin: nil})
              |> subscribe_and_join(ChatUserChannel, "chat_user:acme:ann")
+  end
+
+  test "messages in your rooms arrive as room.activity", %{app: app, ann: ann} do
+    bo = caller_fixture(app, external_id: "bo")
+    room = room_fixture(app, %{}, [ann.user, bo.user])
+    {:ok, _, _socket} = join_user(ann, "chat_user:acme:ann")
+
+    {:ok, _message, events} = Eventbus.Chat.Messages.send_message(bo, room, %{"text" => "ping"})
+    Broadcast.dispatch(app, events)
+
+    room_id = room.id
+
+    assert_push "room.activity", %{
+      room_id: ^room_id,
+      message: %{text: "ping", sender: %{id: "bo"}}
+    }
   end
 
   test "being added to and removed from rooms arrives here", %{app: app, ann: ann} do

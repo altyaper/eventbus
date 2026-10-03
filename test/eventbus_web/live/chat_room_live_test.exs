@@ -5,7 +5,7 @@ defmodule EventbusWeb.ChatRoomLiveTest do
   import Eventbus.ApplicationsFixtures
   import Eventbus.ChatFixtures
 
-  alias Eventbus.Chat.{Broadcast, Messages, Rooms, Users}
+  alias Eventbus.Chat.{Broadcast, Messages, Presence, Rooms, Users}
   alias Eventbus.Accounts.User
 
   setup do
@@ -48,6 +48,21 @@ defmodule EventbusWeb.ChatRoomLiveTest do
       Broadcast.dispatch(app, events)
       assert has_element?(live, "#member-bo")
       assert has_element?(live, "#members-count", "2")
+    end
+
+    test "shows who's online", %{conn: conn, room: room} do
+      {:ok, live, _html} = live(conn, ~p"/apps/acme/chat/rooms/#{room.id}")
+      assert has_element?(live, "#online-empty")
+
+      topic = Broadcast.room_topic("acme", room.id)
+      Phoenix.PubSub.subscribe(Eventbus.PubSub, topic)
+
+      {:ok, _} =
+        Presence.track(self(), topic, "ann", %{display_name: "Ann", avatar_url: nil, online_at: 0})
+
+      assert_receive %Phoenix.Socket.Broadcast{event: "presence_diff"}
+
+      assert has_element?(live, "#online-ann", "Ann")
     end
 
     test "adds and removes members", %{conn: conn, app: app, room: room} do

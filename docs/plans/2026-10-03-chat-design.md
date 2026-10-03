@@ -81,8 +81,9 @@ Bigserial ids, `:utc_datetime` timestamps, everything cascades from `application
   for server-side sends.
 - Pagination is by message id over `(room_id, id)`: `before` for older, `after` for gap fill,
   pages oldest-first, `limit` ≤ 100.
-- Unread = messages with `id > last_read_message_id`, not mine, not deleted; one grouped query
-  for the room list, capped at 99 ("99+").
+- Unread = messages with `id > last_read_message_id`, not mine, not deleted, sent since I
+  joined (so joining a busy room doesn't start with its history unread); one grouped query for
+  the room list. The count is exact; clients show "99+".
 - Public rooms: a token user from the same app may join without membership, which inserts a
   `member` row. Direct and group rooms need a server-added membership.
 - Delete sets `deleted_at`; text, metadata and reactions are blanked in serialization, the row
@@ -110,8 +111,12 @@ Client pushes, replying `{:ok, …}` or `{:error, %{reason}}`:
 
 **`ChatUserChannel`**, `chat_user:<slug>:<user_id>`, own user only. Join reply is the room list
 (preview, unread, members; the other user for direct rooms). Pushes: `room.activity`
-`{room_id, message_preview, last_message_at}`, `room.member.added` / `room.member.removed`,
-`read_state.updated` (clears badges in other tabs).
+`{room_id, message (preview), last_message_at}`, `room.member.added` / `room.member.removed`,
+`read_state.updated` `{room_id, last_read_message_id, unread_count}` (clears badges in other
+tabs).
+
+Clients see users by the app's external id everywhere (senders, members, presence, topics), never
+eventbus's internal ids.
 
 Room topic events:
 
@@ -121,7 +126,7 @@ Room topic events:
 | `chat.reaction.added` / `.removed` | `{room_id, message_id, user_id, emoji}` |
 | `chat.typing.started` / `.stopped` | `{room_id, user_id}` |
 | `chat.member.joined` / `.left` | `{room_id, member}` |
-| `presence_state` / `presence_diff` | Phoenix.Presence, keyed by chat_user_id |
+| `presence_state` / `presence_diff` | Phoenix.Presence, keyed by the app's user id |
 
 - Presence metas are per connection (`{display_name, avatar_url, online_at}`), so a user is
   online while any tab is.

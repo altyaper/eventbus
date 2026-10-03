@@ -12,6 +12,7 @@ defmodule Eventbus.Application do
       Eventbus.Repo,
       {DNSCluster, query: Application.get_env(:eventbus, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Eventbus.PubSub},
+      Eventbus.Chat.Presence,
       # Resolves (or generates) the API key before we serve requests
       Eventbus.Settings,
       # Start to serve requests, typically the last entry

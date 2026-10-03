@@ -17,7 +17,8 @@ defmodule Eventbus.Chat.Messages do
 
   @doc """
   Stores a message from the caller in `room` and returns
-  `{:ok, message, events}`. The caller must be a member. Sending again with
+  `{:ok, message, events}`: `chat.message.created` to the room and
+  `room.activity` to each member. The caller must be a member. Sending again with
   the same `client_ref` returns the stored message and no events, so retries
   can't duplicate.
   """
@@ -50,12 +51,7 @@ defmodule Eventbus.Chat.Messages do
     |> case do
       {:ok, %{message: message}} ->
         message = %{message | sender: caller.user}
-
-        {:ok, message,
-         [
-           {:room, room, "chat.message.created",
-            %{room_id: room.id, message: Serializer.message(message)}}
-         ]}
+        {:ok, message, created_events(room, message)}
 
       {:error, :message, changeset, _changes} ->
         # The same client_ref sent twice at once: the unique index let one in.
@@ -64,6 +60,22 @@ defmodule Eventbus.Chat.Messages do
           existing -> {:ok, existing, []}
         end
     end
+  end
+
+  # The full message to the room; a preview to every member's own topic, for
+  # sidebars showing rooms they haven't opened.
+  defp created_events(room, message) do
+    activity = %{
+      room_id: room.id,
+      message: Serializer.message_preview(message),
+      last_message_at: message.inserted_at
+    }
+
+    [
+      {:room, room, "chat.message.created",
+       %{room_id: room.id, message: Serializer.message(message)}}
+      | for(user <- Rooms.list_member_users(room), do: {:user, user, "room.activity", activity})
+    ]
   end
 
   defp get_by_client_ref(%Caller{user: user}, client_ref) when is_binary(client_ref) do

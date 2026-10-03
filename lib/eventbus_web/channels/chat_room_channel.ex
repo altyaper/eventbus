@@ -8,12 +8,19 @@ defmodule EventbusWeb.ChatRoomChannel do
   `{:error, %{reason: "not_found" | "invalid" | "rate_limited"}}`; room events
   (`chat.message.created`, `chat.member.joined`, ...) arrive as pushes named
   after the event. Identity always comes from the socket's token.
+
+  After joining, the socket is tracked in `Eventbus.Chat.Presence`
+  (`presence_state` / `presence_diff` pushes). Typing lives in this process:
+  `typing: true` broadcasts `chat.typing.started` at most every few seconds,
+  and `chat.typing.stopped` follows on `typing: false`, a sent message, a
+  closed socket, or a few seconds without a refresh, so a crashed client
+  can't leave "is typing" behind.
   """
 
   use Phoenix.Channel
 
   alias Eventbus.Origins
-  alias Eventbus.Chat.{Broadcast, Messages, Rooms, Serializer}
+  alias Eventbus.Chat.{Broadcast, Messages, Presence, ReadStates, Rooms, Serializer}
 
   # At most this many sends per socket in the window.
   @send_limit 10
@@ -26,8 +33,10 @@ defmodule EventbusWeb.ChatRoomChannel do
          true <- Origins.allowed_for_app?(socket.assigns.origin, slug) || {:error, :origin},
          {:ok, room, events} <- Rooms.open_room(caller, room_id) do
       Broadcast.dispatch(caller.app, events)
+      send(self(), :after_join)
 
-      {:ok, join_reply(room, params), socket |> assign(:room, room) |> assign(:send_times, [])}
+      {:ok, join_reply(caller, room, params),
+       socket |> assign(:room, room) |> assign(:send_times, []) |> assign(:typing, nil)}
     else
       {:error, :origin} -> {:error, %{reason: "origin not allowed"}}
       _not_found -> {:error, %{reason: "not_found"}}
@@ -40,7 +49,7 @@ defmodule EventbusWeb.ChatRoomChannel do
   # already has, sent again on every rejoin), the messages it missed; a gap
   # longer than a page is replaced by the newest page and flagged, so the
   # client starts over instead of showing a hole.
-  defp join_reply(room, params) do
+  defp join_reply(caller, room, params) do
     page =
       case params do
         %{"after" => after_id} when is_integer(after_id) ->
@@ -58,7 +67,18 @@ defmodule EventbusWeb.ChatRoomChannel do
       members: room |> Rooms.list_members() |> Enum.map(&Serializer.member/1),
       messages: Enum.map(page.messages, &Serializer.message/1),
       has_more: page.has_more,
-      gap_truncated: page.gap_truncated
+      gap_truncated: page.gap_truncated,
+      read_state: read_state(caller, room)
+    }
+  end
+
+  defp read_state(caller, room) do
+    %{
+      last_read_message_id:
+        case ReadStates.get_read_state(room, caller.user) do
+          nil -> nil
+          read_state -> read_state.last_read_message_id
+        end
     }
   end
 
@@ -72,7 +92,7 @@ defmodule EventbusWeb.ChatRoomChannel do
         case Messages.send_message(caller, room, attrs) do
           {:ok, message, events} ->
             Broadcast.dispatch(caller.app, events)
-            {:reply, {:ok, %{message: Serializer.message(message)}}, socket}
+            {:reply, {:ok, %{message: Serializer.message(message)}}, stop_typing(socket)}
 
           {:error, reason} ->
             {:reply, error(reason), socket}
@@ -95,11 +115,47 @@ defmodule EventbusWeb.ChatRoomChannel do
      socket}
   end
 
+  def handle_in("typing", %{"typing" => true}, socket), do: {:noreply, start_typing(socket)}
+  def handle_in("typing", %{"typing" => false}, socket), do: {:noreply, stop_typing(socket)}
+
+  def handle_in("read", %{"message_id" => message_id}, socket) do
+    %{chat_caller: caller, room: room} = socket.assigns
+
+    case ReadStates.mark_read(caller, room, message_id) do
+      {:ok, read_state, events} ->
+        Broadcast.dispatch(caller.app, events)
+        {:reply, {:ok, %{last_read_message_id: read_state.last_read_message_id}}, socket}
+
+      {:error, reason} ->
+        {:reply, error(reason), socket}
+    end
+  end
+
   def handle_in(_event, _params, socket), do: {:reply, error(:invalid), socket}
 
   # A removed member stops receiving the room straight away; a :normal stop
   # sends phx_close, so the client doesn't try to rejoin.
   @impl true
+  def handle_info(:after_join, socket) do
+    user = socket.assigns.chat_caller.user
+    push(socket, "presence_state", Presence.list(socket))
+
+    {:ok, _ref} =
+      Presence.track(socket, user.external_id, %{
+        display_name: user.display_name,
+        avatar_url: user.avatar_url,
+        online_at: System.system_time(:second)
+      })
+
+    {:noreply, socket}
+  end
+
+  # Only the latest refresh's timer counts; older ones are stale.
+  def handle_info({:typing_expired, ref}, %{assigns: %{typing: %{ref: ref}}} = socket),
+    do: {:noreply, stop_typing(socket)}
+
+  def handle_info({:typing_expired, _stale}, socket), do: {:noreply, socket}
+
   def handle_info({:chat_event, "chat.member.left" = name, payload}, socket) do
     push(socket, name, payload)
 
@@ -112,6 +168,52 @@ defmodule EventbusWeb.ChatRoomChannel do
     push(socket, name, payload)
     {:noreply, socket}
   end
+
+  @impl true
+  def terminate(_reason, socket) do
+    if socket.assigns[:typing], do: stop_typing(socket)
+    :ok
+  end
+
+  # Broadcasts `started` when typing begins, and again while it goes on so
+  # other clients (which drop a typist after a few seconds without news)
+  # keep showing it; pushes the expiry back on every refresh.
+  defp start_typing(socket) do
+    now = System.monotonic_time(:millisecond)
+    typing = socket.assigns.typing
+
+    broadcast_at =
+      if is_nil(typing) or now - typing.broadcast_at >= typing_throttle_ms() do
+        broadcast_typing(socket, "chat.typing.started")
+        now
+      else
+        typing.broadcast_at
+      end
+
+    if typing, do: Process.cancel_timer(typing.timer)
+    ref = make_ref()
+    timer = Process.send_after(self(), {:typing_expired, ref}, typing_ttl_ms())
+    assign(socket, :typing, %{ref: ref, timer: timer, broadcast_at: broadcast_at})
+  end
+
+  defp stop_typing(%{assigns: %{typing: nil}} = socket), do: socket
+
+  defp stop_typing(%{assigns: %{typing: typing}} = socket) do
+    Process.cancel_timer(typing.timer)
+    broadcast_typing(socket, "chat.typing.stopped")
+    assign(socket, :typing, nil)
+  end
+
+  defp broadcast_typing(socket, name) do
+    %{chat_caller: caller, room: room} = socket.assigns
+
+    Broadcast.dispatch_from(caller.app, [
+      {:room, room, name, %{room_id: room.id, user_id: caller.user.external_id}}
+    ])
+  end
+
+  defp typing_ttl_ms, do: Application.get_env(:eventbus, :chat_typing_ttl_ms, 4_000)
+  defp typing_throttle_ms, do: Application.get_env(:eventbus, :chat_typing_throttle_ms, 3_000)
 
   defp take_send_slot(socket) do
     now = System.monotonic_time(:millisecond)
