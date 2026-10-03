@@ -10,9 +10,13 @@
 ARG ELIXIR_VERSION=1.18.5
 ARG OTP_VERSION=27.3.4.18
 ARG DEBIAN_VERSION=bookworm-20260918-slim
+# The rolling, heavily-cached tag, not the dated one above — the hexpm/elixir
+# builder needs an exact dated tag to match its own build, but the plain
+# debian runner doesn't, and the dated tag has been unreliable to fetch.
+ARG RUNNER_DEBIAN_VERSION=bookworm-slim
 
 ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
-ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
+ARG RUNNER_IMAGE="debian:${RUNNER_DEBIAN_VERSION}"
 
 FROM ${BUILDER_IMAGE} AS builder
 
