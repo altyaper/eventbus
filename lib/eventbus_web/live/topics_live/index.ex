@@ -10,7 +10,6 @@ defmodule EventbusWeb.TopicsLive.Index do
      socket
      |> assign(:page_title, "Topics")
      |> assign(:form, to_form(Topics.change_topic(%Topic{})))
-     |> assign(:curl_example, curl_example())
      |> stream_configure(:groups, dom_id: &group_dom_id/1)
      |> assign_groups()}
   end
@@ -27,6 +26,15 @@ defmodule EventbusWeb.TopicsLive.Index do
 
   defp group_dom_id(%{app: nil}), do: "ungrouped-topics"
   defp group_dom_id(%{app: app}), do: "app-#{app}"
+
+  # Build the quick-start URL from the address the browser is on, not the
+  # endpoint config: PHX_HOST may be a LAN IP while the page is being viewed
+  # through a domain behind a TLS proxy. Once connected, `uri` is the
+  # browser's own location, so scheme, host and port all match.
+  @impl true
+  def handle_params(_params, uri, socket) do
+    {:noreply, assign(socket, :curl_example, curl_example(uri))}
+  end
 
   @impl true
   def handle_event("validate", %{"topic" => topic_params}, socket) do
@@ -47,9 +55,12 @@ defmodule EventbusWeb.TopicsLive.Index do
     end
   end
 
-  defp curl_example do
+  defp curl_example(uri) do
+    %URI{scheme: scheme, host: host, port: port} = URI.parse(uri)
+    endpoint = %URI{scheme: scheme, host: host, port: port, path: "/api/topics/my.topic/events"}
+
     """
-    curl -X POST #{url(~p"/api/topics/my.topic/events")} \\
+    curl -X POST #{URI.to_string(endpoint)} \\
       -H "Authorization: Bearer $EVENTBUS_API_KEY" \\
       -H "Content-Type: application/json" \\
       -d '{"hello": "world"}'\

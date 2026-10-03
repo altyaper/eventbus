@@ -44,4 +44,14 @@ defmodule EventbusWeb.TopicsLiveTest do
 
     assert has_element?(live, "#app-chat", "chat.random")
   end
+
+  test "the quick-start curl uses the address the browser is on", %{conn: conn} do
+    {:ok, live, _html} = live(conn, ~p"/")
+
+    assert has_element?(
+             live,
+             "#curl-example",
+             "http://www.example.com/api/topics/my.topic/events"
+           )
+  end
 end
