@@ -15,7 +15,7 @@ defmodule EventbusWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
-    plug EventbusWeb.Plugs.RequireApiKey
+    plug EventbusWeb.Plugs.RequireAppCredentials
   end
 
   scope "/", EventbusWeb do

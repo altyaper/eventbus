@@ -1,7 +1,8 @@
 defmodule Eventbus.Settings do
   @moduledoc """
   Instance-wide settings persisted in the `settings` table. Currently only the
-  API key that gates HTTP publishing and the initial setup screen.
+  API key that proves ownership at the first-run setup screen. (Publishing
+  uses per-application credentials; see `Eventbus.Applications`.)
   """
 
   require Logger

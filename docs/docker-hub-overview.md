@@ -1,15 +1,16 @@
 # eventbus
 
 A tiny, self-hosted **real-time event bus** built with Elixir and Phoenix. Publish JSON events to a
-named topic over HTTP or WebSocket, and every subscriber on that topic gets them instantly. A
-built-in web UI lets you browse topics and watch events stream in live.
+named topic over HTTP, and every WebSocket subscriber on that topic gets them instantly. A
+built-in web UI lets you manage applications and their topics and watch events stream in live.
 
 Designed to run on small hardware: a Raspberry Pi on your LAN is the reference target.
 
-- **Publish over HTTP**: `POST /api/topics/:name/events` with a bearer API key
+- **Applications**: each owns the topics named `<app>.*` and has its own client ID and secret
+- **Publish over HTTP**: `POST /api/topics/:name/events` with the app's credentials (Basic auth)
 - **Subscribe over WebSocket**: standard Phoenix Channels on `/socket`
-- **Live web UI**: list topics, open one, and watch events arrive in real time
-- **Topics are created on first use**: no setup step before publishing
+- **Live web UI**: manage applications, open a topic, and watch events arrive in real time
+- **Topics are created on first publish** within the app
 - **Migrations run automatically** on container start
 
 > Events are **live-only**. They are broadcast to whoever is connected at that moment and are not
@@ -84,9 +85,9 @@ docker run -d --name eventbus \
 The database must already exist. eventbus creates its own tables on startup.
 
 **First run:** open the app and you land on `/setup`, which creates the superadmin account. It
-asks for the API key, which is generated on first boot and printed in the container logs
-(`docker logs eventbus`) until setup is done. Afterwards the superadmin can copy it from the user
-menu.
+asks for the setup key, which is generated on first boot and printed in the container logs
+(`docker logs eventbus`) until setup is done. Then create an application on the home page to get
+publishing credentials.
 
 ---
 
@@ -96,7 +97,7 @@ menu.
 | ------------------ | -------- | ------------- | --------------------------------------------------------------------------- |
 | `DATABASE_URL`     | yes      | —             | Postgres URL, e.g. `ecto://user:pass@db/eventbus_prod`                      |
 | `SECRET_KEY_BASE`  | yes      | —             | Signs cookies and sessions. At least 64 random characters.                  |
-| `EVENTBUS_API_KEY` | no       | generated     | Bearer token for HTTP publishing and `/setup`. Generated and stored on first boot if unset. |
+| `EVENTBUS_API_KEY` | no       | generated     | Proof of ownership at `/setup`. Generated and stored on first boot if unset. |
 | `PHX_HOST`         | no       | `example.com` | Hostname or IP clients use to reach the app. Used for URLs and origin checks. |
 | `PORT`             | no       | `4000`        | HTTP port inside the container                                              |
 | `POOL_SIZE`        | no       | `10`          | Database connection pool size                                               |
@@ -109,8 +110,8 @@ menu.
 ### Publish an event (HTTP)
 
 ```sh
-curl -i http://raspberrypi.local:4000/api/topics/sensors.kitchen/events \
-  -H "Authorization: Bearer $EVENTBUS_API_KEY" \
+curl -i -u "$CLIENT_ID:$CLIENT_SECRET" \
+  http://raspberrypi.local:4000/api/topics/sensors.kitchen/events \
   -H "Content-Type: application/json" \
   -d '{"temperature": 21.5}'
 ```
@@ -170,9 +171,10 @@ eventbus is built for a **trusted network** such as a home LAN.
 
 - It serves **plain HTTP**, with no TLS. Put a reverse proxy (Caddy, Traefik, nginx) in front of
   it if you expose it beyond your LAN.
-- The API key protects **HTTP publishing only**. WebSocket subscribing and publishing, and the web
-  UI, are not authenticated.
-- There is one shared API key and no user accounts.
+- Publishing needs an application's credentials, and only reaches that application's topics.
+  The web UI requires login. WebSocket **subscribing** is not authenticated: anyone who can reach
+  `/socket` from an allowed origin and knows a topic name can listen, so don't put secrets in
+  events.
 
 ---
 

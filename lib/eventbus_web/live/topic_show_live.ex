@@ -7,15 +7,21 @@ defmodule EventbusWeb.TopicShowLive do
 
   @impl true
   def mount(%{"name" => name}, _session, socket) do
-    {:ok, _topic} = Topics.get_or_create_by_name(name)
-
-    {:ok,
-     socket
-     |> assign(:page_title, name)
-     |> assign(:name, name)
-     |> assign(:listening, false)
-     |> assign(:events, [])
-     |> assign_payload_form(%{"payload" => ""})}
+    # Topics belong to applications now, so the page no longer creates them.
+    if Topics.get_topic_by_name(name) do
+      {:ok,
+       socket
+       |> assign(:page_title, name)
+       |> assign(:name, name)
+       |> assign(:listening, false)
+       |> assign(:events, [])
+       |> assign_payload_form(%{"payload" => ""})}
+    else
+      {:ok,
+       socket
+       |> put_flash(:error, "Topic #{name} doesn't exist.")
+       |> push_navigate(to: ~p"/")}
+    end
   end
 
   @impl true

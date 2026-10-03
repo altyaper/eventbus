@@ -1,36 +1,25 @@
 defmodule Eventbus.Events do
   @moduledoc """
-  Publishing events to a topic. The single code path shared by the HTTP
-  publish endpoint and the WebSocket channel's "publish" message, so both
-  produce the same envelope and broadcast the same way.
+  Publishing events to a topic. Shared by the HTTP publish endpoint and the
+  topic page's test form, so both produce the same envelope and broadcast the
+  same way. Callers decide who may publish where; this only broadcasts.
   """
-
-  alias Eventbus.Topics
 
   @pubsub Eventbus.PubSub
 
   @doc """
-  Wraps `payload` in the event envelope, creates the topic if it doesn't
-  exist yet, and broadcasts it to every listener on `topic_name`.
-
-  Returns `{:ok, event}` with the full envelope that was broadcast, or
-  `{:error, changeset}` if `topic_name` is invalid.
+  Wraps `payload` in the event envelope and broadcasts it to every listener
+  on `topic_name`. Returns `{:ok, event}` with the envelope.
   """
   def publish(topic_name, payload) do
-    case Topics.get_or_create_by_name(topic_name) do
-      {:ok, _topic} ->
-        event = %{
-          "topic" => topic_name,
-          "payload" => payload,
-          "published_at" => DateTime.utc_now()
-        }
+    event = %{
+      "topic" => topic_name,
+      "payload" => payload,
+      "published_at" => DateTime.utc_now()
+    }
 
-        Phoenix.PubSub.broadcast(@pubsub, pubsub_topic(topic_name), {:event, event})
-        {:ok, event}
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
+    Phoenix.PubSub.broadcast(@pubsub, pubsub_topic(topic_name), {:event, event})
+    {:ok, event}
   end
 
   @doc """

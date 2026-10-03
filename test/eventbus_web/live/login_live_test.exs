@@ -52,9 +52,4 @@ defmodule EventbusWeb.LoginLiveTest do
     refute get_session(conn, :user_token)
     refute Eventbus.Accounts.get_user_by_session_token(token)
   end
-
-  test "shows the API key only to the superadmin", %{conn: conn, user: user} do
-    {:ok, live, _html} = live(log_in_user(conn, user), ~p"/")
-    assert has_element?(live, "#api-key-value", Eventbus.Settings.api_key())
-  end
 end

@@ -20,9 +20,9 @@ if System.get_env("PHX_SERVER") do
   config :eventbus, EventbusWeb.Endpoint, server: true
 end
 
-# Shared secret for HTTP publishing and the initial /setup screen. Optional:
-# when unset, a key is generated on first boot and stored in the database
-# (see Eventbus.Settings).
+# Key that proves ownership at the first-run /setup screen. Optional: when
+# unset, a key is generated on first boot and stored in the database (see
+# Eventbus.Settings). Publishing uses per-application credentials.
 api_key = System.get_env("EVENTBUS_API_KEY", "")
 
 if api_key != "" do

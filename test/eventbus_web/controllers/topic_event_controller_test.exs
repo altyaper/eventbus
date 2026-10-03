@@ -1,42 +1,75 @@
 defmodule EventbusWeb.TopicEventControllerTest do
   use EventbusWeb.ConnCase
 
+  import Eventbus.ApplicationsFixtures
+
   alias Eventbus.Topics
 
-  @api_key Application.compile_env(:eventbus, :api_key)
+  setup do
+    %{app: app_fixture(slug: "chat")}
+  end
+
+  defp basic_auth(conn, client_id, secret) do
+    put_req_header(conn, "authorization", "Basic " <> Base.encode64("#{client_id}:#{secret}"))
+  end
 
   describe "POST /api/topics/:name/events" do
-    test "without an API key returns 401", %{conn: conn} do
-      conn = post(conn, "/api/topics/some-topic/events", %{"hello" => "world"})
-      assert json_response(conn, 401) == %{"error" => "unauthorized"}
-    end
-
-    test "with the wrong API key returns 401", %{conn: conn} do
+    test "publishes with valid credentials and creates the topic", %{conn: conn, app: app} do
       conn =
         conn
-        |> put_req_header("authorization", "Bearer wrong-key")
-        |> post("/api/topics/some-topic/events", %{"hello" => "world"})
+        |> basic_auth(app.client_id, app.secret)
+        |> post("/api/topics/chat.lobby/events", %{"hello" => "world"})
 
-      assert json_response(conn, 401) == %{"error" => "unauthorized"}
-    end
-
-    test "with a valid API key publishes and echoes the event", %{conn: conn} do
-      conn =
-        conn
-        |> put_req_header("authorization", "Bearer #{@api_key}")
-        |> post("/api/topics/some-topic/events", %{"hello" => "world"})
-
-      assert %{"topic" => "some-topic", "payload" => %{"hello" => "world"}} =
+      assert %{"topic" => "chat.lobby", "payload" => %{"hello" => "world"}} =
                json_response(conn, 202)
 
-      assert {:ok, %{name: "some-topic"}} = Topics.get_or_create_by_name("some-topic")
+      assert Topics.get_topic_by_name("chat.lobby").application_id == app.id
     end
 
-    test "with an invalid topic name returns 422", %{conn: conn} do
+    test "returns 401 without credentials", %{conn: conn} do
+      conn = post(conn, "/api/topics/chat.lobby/events", %{})
+      assert json_response(conn, 401) == %{"error" => "unauthorized"}
+    end
+
+    test "returns 401 for a wrong secret or unknown client", %{conn: conn, app: app} do
+      for {client_id, secret} <- [{app.client_id, "ebs_wrong"}, {"ebc_unknown", app.secret}] do
+        conn =
+          conn
+          |> basic_auth(client_id, secret)
+          |> post("/api/topics/chat.lobby/events", %{})
+
+        assert json_response(conn, 401) == %{"error" => "unauthorized"}
+      end
+
+      refute Topics.get_topic_by_name("chat.lobby")
+    end
+
+    test "returns 401 for malformed or non-Basic headers", %{conn: conn} do
+      for header <- ["Basic not-base64!", "Basic " <> Base.encode64("no-colon"), "Bearer x"] do
+        conn =
+          conn
+          |> put_req_header("authorization", header)
+          |> post("/api/topics/chat.lobby/events", %{})
+
+        assert json_response(conn, 401) == %{"error" => "unauthorized"}
+      end
+    end
+
+    test "returns 403 for another application's topic", %{conn: conn, app: app} do
       conn =
         conn
-        |> put_req_header("authorization", "Bearer #{@api_key}")
-        |> post("/api/topics/Bad Name/events", %{"hello" => "world"})
+        |> basic_auth(app.client_id, app.secret)
+        |> post("/api/topics/other.lobby/events", %{})
+
+      assert json_response(conn, 403) == %{"error" => "topic belongs to another application"}
+      refute Topics.get_topic_by_name("other.lobby")
+    end
+
+    test "returns 422 for an invalid topic name", %{conn: conn, app: app} do
+      conn =
+        conn
+        |> basic_auth(app.client_id, app.secret)
+        |> post("/api/topics/Bad Name/events", %{})
 
       assert json_response(conn, 422) == %{"error" => "invalid topic name"}
     end

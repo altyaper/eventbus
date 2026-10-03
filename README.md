@@ -20,9 +20,16 @@ docker compose up -d --build
 **First run:** open the app and you land on `/setup`, which creates the superadmin account.
 It asks for the server's API key as proof you own the install. Unless you set
 `EVENTBUS_API_KEY` yourself, a key is generated on first boot, stored in the database and
-printed in the logs until setup is done (`docker compose logs app`). Afterwards the
-superadmin can copy it from the user menu. The same key authorizes
-`POST /api/topics/:name/events`.
+printed in the logs until setup is done (`docker compose logs app`). That's its only use.
+
+**Publishing:** create an application on the home page (e.g. `changologs`). It owns every topic
+named `changologs.*` and gets a client ID and secret (the secret is shown once). Publish with
+HTTP Basic auth:
+
+```
+curl -u "$CLIENT_ID:$CLIENT_SECRET" -X POST http://raspberrypi.local:4000/api/topics/changologs.logs/events \
+  -H "Content-Type: application/json" -d '{"hello": "world"}'
+```
 
 Build this directly on the target machine so Docker picks the right CPU architecture
 automatically (no cross-compilation needed). The app runs plain HTTP on the LAN

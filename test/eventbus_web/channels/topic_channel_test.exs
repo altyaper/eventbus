@@ -7,13 +7,13 @@ defmodule EventbusWeb.TopicChannelTest do
     {:ok, _, socket} =
       EventbusWeb.UserSocket
       |> socket("user_id", %{})
-      |> subscribe_and_join(EventbusWeb.TopicChannel, "topic:joins-test")
+      |> subscribe_and_join(EventbusWeb.TopicChannel, "topic:chat.lobby")
 
     %{socket: socket}
   end
 
-  test "join auto-creates the topic if it doesn't exist yet" do
-    assert {:ok, _topic} = Topics.get_or_create_by_name("joins-test")
+  test "join works without creating a topic row" do
+    refute Topics.get_topic_by_name("chat.lobby")
   end
 
   test "join rejects an invalid topic name" do
@@ -24,16 +24,19 @@ defmodule EventbusWeb.TopicChannelTest do
   end
 
   test "broadcasts on the topic are pushed to the client as \"event\"" do
-    event = %{"topic" => "joins-test", "payload" => %{"a" => 1}, "published_at" => "now"}
-    Phoenix.PubSub.broadcast(Eventbus.PubSub, "topic:joins-test", {:event, event})
+    event = %{"topic" => "chat.lobby", "payload" => %{"a" => 1}, "published_at" => "now"}
+    Phoenix.PubSub.broadcast(Eventbus.PubSub, "topic:chat.lobby", {:event, event})
 
     assert_push "event", ^event
   end
 
-  test "handle_in publish/2 broadcasts and replies with the published event", %{socket: socket} do
-    ref = push(socket, "publish", %{"hello" => "world"})
-    assert_reply ref, :ok, event
-    assert event["topic"] == "joins-test"
-    assert event["payload"] == %{"hello" => "world"}
+  # The crash from the unhandled message is expected; keep it out of the output.
+  @tag :capture_log
+  test "publishing over the channel is no longer supported", %{socket: socket} do
+    Process.flag(:trap_exit, true)
+    push(socket, "publish", %{"hello" => "world"})
+
+    assert_receive {:EXIT, _pid, _reason}
+    refute_push "event", _
   end
 end

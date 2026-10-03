@@ -74,8 +74,9 @@ services:
       # allowed by the superadmin at /settings, without a redeploy.
       PHX_EXTRA_ORIGINS: ${PHX_EXTRA_ORIGINS:-}
       PORT: "4000"
-      # Optional. Leave unset to have a key generated on first boot and printed
-      # in the logs (docker compose logs app) until setup at /setup is done.
+      # Optional key for the first-run /setup screen. Leave unset to have one
+      # generated on first boot and printed in the logs (docker compose logs app)
+      # until setup is done. Publishing uses per-application credentials.
       EVENTBUS_API_KEY: ${EVENTBUS_API_KEY:-}
     ports:
       - "4000:4000"

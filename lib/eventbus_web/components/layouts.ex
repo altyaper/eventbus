@@ -79,7 +79,7 @@ defmodule EventbusWeb.Layouts do
   end
 
   @doc """
-  The logged-in user's menu: username, role, the API key (superadmin only)
+  The logged-in user's menu: username, role, settings (superadmin only)
   and log out.
   """
   attr :current_scope, Eventbus.Accounts.Scope, required: true
@@ -115,50 +115,6 @@ defmodule EventbusWeb.Layouts do
           >
             {@current_scope.user.role}
           </span>
-        </div>
-
-        <div
-          :if={Scope.superadmin?(@current_scope)}
-          id="api-key-panel"
-          class="mx-1 my-1 rounded-xl bg-base-content/5 p-3"
-        >
-          <p class="text-xs font-medium text-base-content/60">API key</p>
-          <div class="mt-1.5 flex items-center gap-2">
-            <code
-              id="api-key-value"
-              class="min-w-0 flex-1 truncate font-mono text-xs blur-sm transition-[filter] duration-200 hover:blur-none"
-              title="Hover to reveal"
-            >{Eventbus.Settings.api_key()}</code>
-            <button
-              id="copy-api-key"
-              type="button"
-              phx-hook=".CopyApiKey"
-              data-copy-target="#api-key-value"
-              class="shrink-0 rounded-md p-1.5 text-base-content/60 transition-colors hover:bg-base-content/10 hover:text-base-content"
-              aria-label="Copy API key"
-            >
-              <.icon name="hero-clipboard-document" class="size-4 copy-idle" />
-              <.icon name="hero-check" class="hidden size-4 text-success copy-done" />
-            </button>
-            <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyApiKey">
-              export default {
-                mounted() {
-                  this.el.addEventListener("click", () => {
-                    const text = document.querySelector(this.el.dataset.copyTarget).textContent.trim()
-                    navigator.clipboard.writeText(text).then(() => {
-                      this.el.querySelector(".copy-idle").classList.add("hidden")
-                      this.el.querySelector(".copy-done").classList.remove("hidden")
-                      clearTimeout(this.timer)
-                      this.timer = setTimeout(() => {
-                        this.el.querySelector(".copy-idle").classList.remove("hidden")
-                        this.el.querySelector(".copy-done").classList.add("hidden")
-                      }, 1500)
-                    })
-                  })
-                }
-              }
-            </script>
-          </div>
         </div>
 
         <.link
