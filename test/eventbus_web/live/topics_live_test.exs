@@ -54,4 +54,17 @@ defmodule EventbusWeb.TopicsLiveTest do
              "http://www.example.com/api/topics/my.topic/events"
            )
   end
+
+  test "deletes an app group and its topics", %{conn: conn} do
+    for name <- ~w(chat.lobby chat.random deploys.prod), do: topic_fixture(name: name)
+
+    {:ok, live, _html} = live(conn, ~p"/")
+    refute has_element?(live, "#ungrouped-topics-delete")
+
+    live |> element("#app-chat-confirm-delete") |> render_click()
+
+    refute has_element?(live, "#app-chat")
+    assert has_element?(live, "#app-deploys", "deploys.prod")
+    assert has_element?(live, "#topics-count", "1 topic")
+  end
 end

@@ -114,4 +114,23 @@ defmodule Eventbus.TopicsTest do
       assert Topic.app(%Topic{name: "standalone"}) == nil
     end
   end
+
+  describe "delete_app_topics/1" do
+    test "deletes only the topics in that app" do
+      for name <- ~w(chat.lobby chat.random chatter.x chat other.chat),
+          do: topic_fixture(name: name)
+
+      assert Topics.delete_app_topics("chat") == 2
+
+      assert Topics.list_topics() |> Enum.map(& &1.name) |> Enum.sort() ==
+               ~w(chat chatter.x other.chat)
+    end
+
+    test "treats '_' in the app name literally" do
+      for name <- ~w(my_app.a myxapp.b), do: topic_fixture(name: name)
+
+      assert Topics.delete_app_topics("my_app") == 1
+      assert [%{name: "myxapp.b"}] = Topics.list_topics()
+    end
+  end
 end

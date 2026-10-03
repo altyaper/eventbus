@@ -42,6 +42,18 @@ defmodule EventbusWeb.TopicsLive.Index do
     {:noreply, assign(socket, :form, to_form(changeset, action: :validate))}
   end
 
+  def handle_event("delete_group", %{"app" => app}, socket) do
+    count = Topics.delete_app_topics(app)
+
+    {:noreply,
+     socket
+     |> put_flash(
+       :info,
+       "Deleted #{count} #{if count == 1, do: "topic", else: "topics"} in #{app}."
+     )
+     |> assign_groups()}
+  end
+
   def handle_event("create", %{"topic" => topic_params}, socket) do
     case Topics.create_topic(topic_params) do
       {:ok, _topic} ->
@@ -66,6 +78,9 @@ defmodule EventbusWeb.TopicsLive.Index do
       -d '{"hello": "world"}'\
     """
   end
+
+  defp confirm_in,
+    do: {"transition ease-out duration-150", "opacity-0 scale-95", "opacity-100 scale-100"}
 
   defp format_date(datetime), do: Calendar.strftime(datetime, "%b %-d, %Y · %H:%M UTC")
 
@@ -126,6 +141,48 @@ defmodule EventbusWeb.TopicsLive.Index do
                 <span class="rounded-full bg-base-content/5 px-2 py-0.5 text-xs font-medium tabular-nums text-base-content/50">
                   {length(group.topics)}
                 </span>
+                <%= if group.app do %>
+                  <button
+                    id={"#{id}-delete"}
+                    type="button"
+                    phx-click={
+                      JS.hide()
+                      |> JS.show(to: "##{id}-confirm", display: "flex", transition: confirm_in())
+                    }
+                    class="ml-auto rounded-md p-1.5 text-base-content/30 transition-colors hover:bg-error/10 hover:text-error"
+                    aria-label={"Delete the #{group.app} group"}
+                  >
+                    <.icon name="hero-trash" class="size-4" />
+                  </button>
+                  <span
+                    id={"#{id}-confirm"}
+                    class="ml-auto hidden items-center gap-2 text-xs font-normal"
+                  >
+                    <span class="text-base-content/60">
+                      Delete {length(group.topics)} {if length(group.topics) == 1,
+                        do: "topic",
+                        else: "topics"}?
+                    </span>
+                    <button
+                      id={"#{id}-cancel"}
+                      type="button"
+                      phx-click={JS.hide(to: "##{id}-confirm") |> JS.show(to: "##{id}-delete")}
+                      class="rounded-md px-2 py-1 font-medium text-base-content/70 transition-colors hover:bg-base-content/5"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      id={"#{id}-confirm-delete"}
+                      type="button"
+                      phx-click="delete_group"
+                      phx-value-app={group.app}
+                      phx-disable-with="Deleting…"
+                      class="rounded-md bg-error px-2.5 py-1 font-semibold text-error-content shadow-sm transition-all hover:brightness-110 active:scale-95"
+                    >
+                      Delete
+                    </button>
+                  </span>
+                <% end %>
               </h3>
               <ul class="grid gap-3 sm:grid-cols-2">
                 <li :for={topic <- group.topics} id={"topic-#{topic.id}"}>

@@ -35,6 +35,20 @@ defmodule Eventbus.Topics do
   end
 
   @doc """
+  Deletes every topic in an app group (names starting with `"<app>."`).
+  Returns the number of topics deleted.
+
+  Topics are created on first use, so a publisher that keeps sending to the
+  app brings its topics back.
+  """
+  def delete_app_topics(app) when is_binary(app) and app != "" do
+    # "_" is a LIKE wildcard and valid in app names, so escape it.
+    pattern = String.replace(app, "_", "\\_") <> ".%"
+    {count, _} = Repo.delete_all(from t in Topic, where: like(t.name, ^pattern))
+    count
+  end
+
+  @doc """
   Gets a single topic.
 
   Raises `Ecto.NoResultsError` if the Topic does not exist.
