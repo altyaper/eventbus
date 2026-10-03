@@ -54,21 +54,23 @@ defmodule EventbusWeb.Layouts do
           </.link>
 
           <nav class="flex items-center gap-2 sm:gap-4">
-            <.link
+            <.nav_link
               :if={@current_scope}
               id="nav-apps"
               navigate={~p"/apps"}
-              aria-current={@nav == :apps && "page"}
-              class={[
-                "flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                if(@nav == :apps,
-                  do: "bg-primary/10 text-primary",
-                  else: "text-base-content/70 hover:bg-base-content/5 hover:text-base-content"
-                )
-              ]}
+              icon="hero-squares-2x2-micro"
+              active={@nav == :apps}
             >
-              <.icon name="hero-squares-2x2-micro" class="hidden size-4 sm:inline-block" /> My Apps
-            </.link>
+              My Apps
+            </.nav_link>
+            <.nav_link
+              id="nav-docs"
+              navigate={~p"/docs"}
+              icon="hero-book-open-micro"
+              active={@nav == :docs}
+            >
+              Docs
+            </.nav_link>
             <.theme_toggle />
             <.user_menu :if={@current_scope} current_scope={@current_scope} />
           </nav>
@@ -83,6 +85,31 @@ defmodule EventbusWeb.Layouts do
     </div>
 
     <.flash_group flash={@flash} />
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :navigate, :string, required: true
+  attr :icon, :string, required: true
+  attr :active, :boolean, default: false
+  slot :inner_block, required: true
+
+  defp nav_link(assigns) do
+    ~H"""
+    <.link
+      id={@id}
+      navigate={@navigate}
+      aria-current={@active && "page"}
+      class={[
+        "flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+        if(@active,
+          do: "bg-primary/10 text-primary",
+          else: "text-base-content/70 hover:bg-base-content/5 hover:text-base-content"
+        )
+      ]}
+    >
+      <.icon name={@icon} class="hidden size-4 sm:inline-block" /> {render_slot(@inner_block)}
+    </.link>
     """
   end
 

@@ -5,8 +5,10 @@ defmodule EventbusWeb.AppLiveTest do
   import Phoenix.LiveViewTest
   import Eventbus.ApplicationsFixtures
   import Eventbus.TopicsFixtures
+  import Eventbus.ChatFixtures
 
   alias Eventbus.{Applications, Origins, Topics}
+  alias Eventbus.Chat.Rooms
   alias Eventbus.Accounts.User
 
   setup do
@@ -29,7 +31,7 @@ defmodule EventbusWeb.AppLiveTest do
     test "sections switch by patching", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/apps/chat/topics")
 
-      for section <- ~w(credentials origins settings topics) do
+      for section <- ~w(chat credentials origins settings topics) do
         live |> element("#section-#{section}") |> render_click()
         assert_patched(live, "/apps/chat/#{section}")
         assert has_element?(live, "#section-#{section}[aria-current=page]")
@@ -49,6 +51,29 @@ defmodule EventbusWeb.AppLiveTest do
       assert has_element?(live, "#topics", "chat.random")
       assert has_element?(live, "#topics-count", "2 topics")
       assert Topics.get_topic_by_name("chat.random")
+    end
+
+    test "lists and creates chat rooms", %{conn: conn, app: app} do
+      room_fixture(app, %{name: "eng"})
+      room_fixture(app_fixture(), %{name: "elsewhere"})
+      {:ok, live, _html} = live(conn, ~p"/apps/chat/chat")
+
+      assert has_element?(live, "#rooms", "eng")
+      refute has_element?(live, "#rooms", "elsewhere")
+
+      live |> form("#room-form", room: %{name: "random", type: "public"}) |> render_submit()
+
+      assert has_element?(live, "#rooms", "random")
+      assert has_element?(live, "#rooms-count", "2 rooms")
+      assert [%{type: "public"}] = Enum.filter(Rooms.list_app_rooms(app), &(&1.name == "random"))
+    end
+
+    test "rejects a blank room name", %{conn: conn, app: app} do
+      {:ok, live, _html} = live(conn, ~p"/apps/chat/chat")
+      live |> form("#room-form", room: %{name: "", type: "group"}) |> render_submit()
+
+      assert has_element?(live, "#room-form", "can't be blank")
+      assert Rooms.list_app_rooms(app) == []
     end
 
     test "rejects invalid topic names", %{conn: conn} do
@@ -151,6 +176,18 @@ defmodule EventbusWeb.AppLiveTest do
       refute has_element?(live, "#section-origins")
       refute has_element?(live, "#section-settings")
       refute has_element?(live, "#topic-form")
+      assert has_element?(live, "#section-chat")
+    end
+
+    test "sees chat rooms, without the new-room form", %{conn: conn, app: app} do
+      room_fixture(app, %{name: "eng"})
+      {:ok, live, _html} = live(conn, ~p"/apps/chat/chat")
+
+      assert has_element?(live, "#rooms", "eng")
+      refute has_element?(live, "#room-form")
+
+      render_hook(live, "create_room", %{"room" => %{"name" => "x", "type" => "group"}})
+      assert length(Rooms.list_app_rooms(app)) == 1
     end
 
     test "restricted sections send them back to topics", %{conn: conn} do

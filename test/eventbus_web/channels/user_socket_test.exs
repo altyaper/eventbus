@@ -17,6 +17,35 @@ defmodule EventbusWeb.UserSocketTest do
     assert socket.assigns.origin == nil
   end
 
+  describe "chat tokens" do
+    setup do
+      app = Eventbus.ApplicationsFixtures.app_fixture()
+
+      {:ok, %{token: token, user: user}} =
+        Eventbus.Chat.Tokens.mint(app, %{external_id: "ann", display_name: "Ann"})
+
+      %{token: token, user: user}
+    end
+
+    test "a valid token makes a chat socket with an id", %{token: token, user: user} do
+      assert {:ok, socket} =
+               connect(UserSocket, %{"token" => token}, connect_info: %{x_headers: []})
+
+      assert socket.assigns.chat_caller.user.id == user.id
+      assert UserSocket.id(socket) == "chat_socket:#{user.id}"
+    end
+
+    test "a bad token is refused" do
+      assert :error = connect(UserSocket, %{"token" => "nope"}, connect_info: %{x_headers: []})
+    end
+
+    test "no token stays anonymous" do
+      assert {:ok, socket} = connect(UserSocket, %{}, connect_info: %{x_headers: []})
+      refute Map.has_key?(socket.assigns, :chat_caller)
+      assert UserSocket.id(socket) == nil
+    end
+  end
+
   describe "OriginHeader.put/1" do
     test "copies Origin into the header" do
       conn =

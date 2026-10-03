@@ -56,6 +56,7 @@ defmodule EventbusWeb.UserAuth do
   @doc """
   LiveView hooks:
 
+    * `:mount_current_scope` - only assigns it, for public pages.
     * `:require_setup` - redirects to `/setup` while no user exists.
     * `:require_authenticated` - redirects to `/login` unless logged in.
     * `:require_superadmin` - redirects to `/apps` unless the user is the
@@ -66,6 +67,10 @@ defmodule EventbusWeb.UserAuth do
 
   Every hook assigns `:current_scope` first.
   """
+  def on_mount(:mount_current_scope, _params, session, socket) do
+    {:cont, mount_current_scope(socket, session)}
+  end
+
   def on_mount(:require_setup, _params, session, socket) do
     socket = mount_current_scope(socket, session)
 

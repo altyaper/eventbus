@@ -1,9 +1,9 @@
 defmodule EventbusWeb.AppLive do
   @moduledoc """
-  One application's pages, one `live_action` per section: topics,
+  One application's pages, one `live_action` per section: topics, chat,
   credentials, origins and settings. Sections are patched, so the app is
-  loaded once. Everyone sees topics; the other sections and every change are
-  superadmin-only.
+  loaded once. Everyone sees topics and chat; the other sections and every
+  change are superadmin-only.
   """
 
   use EventbusWeb, :live_view
@@ -11,6 +11,7 @@ defmodule EventbusWeb.AppLive do
   import EventbusWeb.AppComponents
 
   alias Eventbus.{Applications, Origins, Topics}
+  alias Eventbus.Chat.{Broadcast, Rooms}
   alias Eventbus.Accounts.Scope
   alias Eventbus.Origins.AllowedOrigin
 
@@ -31,7 +32,8 @@ defmodule EventbusWeb.AppLive do
          |> assign(:superadmin?, Scope.superadmin?(socket.assigns.current_scope))
          |> assign(:secret, nil)
          |> stream_configure(:topics, dom_id: &"topic-#{&1.id}")
-         |> stream_configure(:origins, dom_id: &"origin-#{&1.id}")}
+         |> stream_configure(:origins, dom_id: &"origin-#{&1.id}")
+         |> stream_configure(:rooms, dom_id: &"room-#{&1.id}")}
     end
   end
 
@@ -83,6 +85,15 @@ defmodule EventbusWeb.AppLive do
     |> stream(:origins, Origins.list_allowed_origins(socket.assigns.app), reset: true)
   end
 
+  defp load_section(socket, :chat, _uri) do
+    rooms = Rooms.list_app_rooms(socket.assigns.app)
+
+    socket
+    |> assign(:rooms_count, length(rooms))
+    |> assign(:room_form, to_form(Rooms.change_room(%{type: "group"})))
+    |> stream(:rooms, rooms, reset: true)
+  end
+
   defp load_section(socket, :settings, _uri), do: socket
 
   @impl true
@@ -111,6 +122,30 @@ defmodule EventbusWeb.AppLive do
 
       {:error, changeset} ->
         {:noreply, assign(socket, :topic_form, topic_form(params, changeset.errors))}
+    end
+  end
+
+  def handle_event("validate_room", %{"room" => params}, socket) do
+    changeset = params |> Rooms.change_room() |> Map.put(:action, :validate)
+    {:noreply, assign(socket, :room_form, to_form(changeset))}
+  end
+
+  def handle_event("create_room", %{"room" => params}, socket) do
+    app = socket.assigns.app
+
+    case Rooms.create_room(app, params) do
+      {:ok, room, events} ->
+        Broadcast.dispatch(app, events)
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Created #{room.name}.")
+         |> assign(:room_form, to_form(Rooms.change_room(%{type: room.type})))
+         |> assign(:rooms_count, socket.assigns.rooms_count + 1)
+         |> stream_insert(:rooms, %{room | members_count: 0}, at: 0)}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :room_form, to_form(changeset))}
     end
   end
 
@@ -221,6 +256,14 @@ defmodule EventbusWeb.AppLive do
           topic_form={@topic_form}
           topics_count={@topics_count}
           topics={@streams.topics}
+        />
+        <.chat_section
+          :if={@live_action == :chat}
+          app={@app}
+          superadmin?={@superadmin?}
+          room_form={@room_form}
+          rooms_count={@rooms_count}
+          rooms={@streams.rooms}
         />
         <.credentials_section
           :if={@live_action == :credentials}
@@ -384,6 +427,107 @@ defmodule EventbusWeb.AppLive do
           Listen by joining <code class="font-mono text-base-content/80">topic:&lt;name&gt;</code>
           on the <code class="font-mono text-base-content/80">/socket</code>
           WebSocket. Browser pages need their site under Origins.
+        </p>
+      </div>
+    </div>
+    """
+  end
+
+  attr :app, :any, required: true
+  attr :superadmin?, :boolean, required: true
+  attr :room_form, :any, required: true
+  attr :rooms_count, :integer, required: true
+  attr :rooms, :any, required: true
+
+  defp chat_section(assigns) do
+    ~H"""
+    <div class="space-y-6">
+      <.card :if={@superadmin?} id="new-room">
+        <h2 class="flex items-center gap-2 font-semibold">
+          <.icon name="hero-plus-circle" class="size-5 text-primary" /> New room
+        </h2>
+        <p class="mt-1 text-sm text-base-content/50">
+          Group rooms are for their members only; any of {@app.slug}'s chat users can join a public room.
+          Direct rooms are created through the API.
+        </p>
+        <.form
+          for={@room_form}
+          id="room-form"
+          phx-change="validate_room"
+          phx-submit="create_room"
+          class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-start"
+        >
+          <div class="min-w-0 flex-1">
+            <.input
+              field={@room_form[:name]}
+              placeholder="engineering"
+              autocomplete="off"
+              phx-debounce="300"
+            />
+          </div>
+          <div class="sm:w-36">
+            <.input
+              field={@room_form[:type]}
+              type="select"
+              options={[{"Group", "group"}, {"Public", "public"}]}
+            />
+          </div>
+          <button
+            id="create-room"
+            type="submit"
+            class="mt-1 inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-content shadow-md shadow-primary/25 transition-all hover:brightness-110 active:scale-95 phx-submit-loading:opacity-60"
+          >
+            <.icon name="hero-plus" class="size-4" /> Create room
+          </button>
+        </.form>
+      </.card>
+
+      <div>
+        <div class="mb-3 flex items-baseline justify-between">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-base-content/50">
+            Rooms
+          </h2>
+          <span id="rooms-count" class="text-sm tabular-nums text-base-content/50">
+            {@rooms_count} {if @rooms_count == 1, do: "room", else: "rooms"}
+          </span>
+        </div>
+        <ul id="rooms" phx-update="stream" class="grid gap-3 sm:grid-cols-2">
+          <li
+            id="rooms-empty"
+            class="hidden only:block rounded-2xl border border-dashed border-base-content/10 px-4 py-5 text-sm text-base-content/50 sm:col-span-2"
+          >
+            No rooms yet. Create one here, or with <code class="font-mono">POST /api/chat/rooms</code>.
+          </li>
+          <li :for={{id, room} <- @rooms} id={id}>
+            <.link
+              navigate={~p"/apps/#{@app.slug}/chat/rooms/#{room.id}"}
+              class="group flex h-full items-center gap-4 rounded-2xl border border-base-content/10 bg-base-100 p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md hover:shadow-primary/5"
+            >
+              <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-content">
+                <.icon name={room_icon(room.type)} class="size-5" />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-medium">{room_label(room)}</span>
+                <span class="mt-0.5 block text-xs text-base-content/50">
+                  {String.capitalize(room.type)} · {room.members_count} {if room.members_count == 1,
+                    do: "member",
+                    else: "members"}
+                  <%= if room.last_message_at do %>
+                    · active {format_date(room.last_message_at)}
+                  <% end %>
+                </span>
+              </span>
+              <.icon
+                name="hero-arrow-right"
+                class="size-4 shrink-0 text-base-content/30 transition-all group-hover:translate-x-0.5 group-hover:text-primary"
+              />
+            </.link>
+          </li>
+        </ul>
+        <p class="mt-4 text-sm text-base-content/50">
+          Chat users connect to <code class="font-mono text-base-content/80">/socket</code>
+          with a token from <code class="font-mono text-base-content/80">POST /api/chat/tokens</code>
+          and join <code class="font-mono text-base-content/80">chat:{@app.slug}:&lt;room id&gt;</code>.
         </p>
       </div>
     </div>

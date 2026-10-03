@@ -33,6 +33,10 @@ defmodule EventbusWeb.Router do
       live "/login", LoginLive
     end
 
+    live_session :public, on_mount: [{EventbusWeb.UserAuth, :mount_current_scope}] do
+      live "/docs", DocsLive
+    end
+
     get "/", HomeController, :index
     post "/login", SessionController, :create
     delete "/logout", SessionController, :delete
@@ -48,7 +52,9 @@ defmodule EventbusWeb.Router do
       live "/apps/:slug/credentials", AppLive, :credentials
       live "/apps/:slug/origins", AppLive, :origins
       live "/apps/:slug/settings", AppLive, :settings
+      live "/apps/:slug/chat", AppLive, :chat
       live "/apps/:slug/topics/:name", TopicShowLive
+      live "/apps/:slug/chat/rooms/:id", ChatRoomLive
     end
   end
 
@@ -56,6 +62,12 @@ defmodule EventbusWeb.Router do
     pipe_through :api
 
     post "/topics/:name/events", TopicEventController, :create
+
+    post "/chat/tokens", ChatTokenController, :create
+    post "/chat/rooms", ChatRoomController, :create
+    post "/chat/rooms/:room_id/members", ChatRoomController, :add_member
+    delete "/chat/rooms/:room_id/members/:user_id", ChatRoomController, :remove_member
+    post "/chat/rooms/:room_id/messages", ChatRoomController, :create_message
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

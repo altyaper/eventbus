@@ -1,13 +1,14 @@
 defmodule EventbusWeb.AppComponents do
   @moduledoc """
   Pieces shared by the My Apps pages: the per-app shell with its section
-  menu, and the copyable credential rows.
+  menu, the copyable credential rows, and chat display helpers.
   """
 
   use EventbusWeb, :html
 
   @sections [
     topics: {"Topics", "hero-signal"},
+    chat: {"Chat", "hero-chat-bubble-left-right"},
     credentials: {"Credentials", "hero-key"},
     origins: {"Origins", "hero-globe-alt"},
     settings: {"Settings", "hero-cog-6-tooth"}
@@ -22,6 +23,7 @@ defmodule EventbusWeb.AppComponents do
   The path of one of `slug`'s sections.
   """
   def section_path(slug, :topics), do: ~p"/apps/#{slug}/topics"
+  def section_path(slug, :chat), do: ~p"/apps/#{slug}/chat"
   def section_path(slug, :credentials), do: ~p"/apps/#{slug}/credentials"
   def section_path(slug, :origins), do: ~p"/apps/#{slug}/origins"
   def section_path(slug, :settings), do: ~p"/apps/#{slug}/settings"
@@ -29,12 +31,13 @@ defmodule EventbusWeb.AppComponents do
   @doc """
   The frame of every page inside an app: breadcrumb, app header and the
   section menu (a sidebar on desktop, tabs on mobile). Non-superadmins only
-  see Topics. Section links patch, so `AppLive` doesn't remount.
+  see Topics and Chat. Section links patch, so `AppLive` doesn't remount.
   """
   attr :app, Eventbus.Applications.App, required: true
   attr :active, :atom, required: true, doc: "the highlighted section"
   attr :superadmin?, :boolean, required: true
   attr :crumb, :string, default: nil, doc: "an extra breadcrumb after the app, e.g. a topic"
+  attr :crumb_parent, :atom, default: :topics, doc: "the section the app breadcrumb links to"
   slot :inner_block, required: true
 
   def app_shell(assigns) do
@@ -51,7 +54,7 @@ defmodule EventbusWeb.AppComponents do
       <.icon name="hero-chevron-right-micro" class="size-4" />
       <%= if @crumb do %>
         <.link
-          navigate={~p"/apps/#{@app.slug}/topics"}
+          navigate={section_path(@app.slug, @crumb_parent)}
           class="font-mono transition-colors hover:text-base-content"
         >
           {@app.slug}
@@ -159,6 +162,41 @@ defmodule EventbusWeb.AppComponents do
   end
 
   @doc """
+  A dark code snippet with an optional caption and a copy button.
+  """
+  attr :id, :string, required: true
+  attr :code, :string, required: true
+  attr :caption, :string, default: nil
+
+  def code_block(assigns) do
+    ~H"""
+    <figure class="group/code relative mt-3 overflow-hidden rounded-xl bg-neutral text-neutral-content shadow-sm">
+      <figcaption
+        :if={@caption}
+        class="border-b border-neutral-content/10 px-4 py-2 font-mono text-[0.7rem] text-neutral-content/50"
+      >
+        {@caption}
+      </figcaption>
+      <button
+        id={"#{@id}-copy"}
+        type="button"
+        phx-hook=".CopyText"
+        data-copy-target={"##{@id}"}
+        class="absolute right-2 top-2 rounded-md p-1.5 text-neutral-content/50 opacity-0 transition-all hover:bg-neutral-content/10 hover:text-neutral-content focus:opacity-100 group-hover/code:opacity-100"
+        aria-label="Copy code"
+      >
+        <.icon name="hero-clipboard-document" class="size-4 copy-idle" />
+        <.icon name="hero-check" class="hidden size-4 text-success copy-done" />
+      </button>
+      <pre
+        id={@id}
+        class="overflow-x-auto p-4 font-mono text-xs leading-relaxed"
+      >{@code}</pre>
+    </figure>
+    """
+  end
+
+  @doc """
   A card for a section's content.
   """
   attr :id, :string, default: nil
@@ -178,4 +216,18 @@ defmodule EventbusWeb.AppComponents do
 
   def confirm_in,
     do: {"transition ease-out duration-150", "opacity-0 scale-95", "opacity-100 scale-100"}
+
+  @doc """
+  How a chat room is named in the admin UI: its name, or "Direct message"
+  for direct rooms, which have none.
+  """
+  def room_label(%{type: "direct"}), do: "Direct message"
+  def room_label(%{name: name}), do: name
+
+  @doc """
+  The icon for a chat room type.
+  """
+  def room_icon("direct"), do: "hero-user"
+  def room_icon("public"), do: "hero-hashtag"
+  def room_icon(_group), do: "hero-lock-closed"
 end

@@ -104,11 +104,20 @@ defmodule Eventbus.Origins do
   origin (no `Origin` header, so not a browser) is allowed, as Phoenix does
   at connect. Always true when the endpoint has origin checks turned off.
   """
-  def allowed_for_topic?(nil, _topic_name), do: true
-
-  def allowed_for_topic?(%URI{} = origin, topic_name) do
-    %{env: env, by_app: by_app} = patterns()
+  def allowed_for_topic?(origin, topic_name) do
     [slug | _rest] = String.split(topic_name, ".", parts: 2)
+    allowed_for_app?(origin, slug)
+  end
+
+  @doc """
+  Whether a socket opened from `origin` may join channels of the app with
+  `slug` (its topics, or its chat rooms). Same rules as
+  `allowed_for_topic?/2`.
+  """
+  def allowed_for_app?(nil, _slug), do: true
+
+  def allowed_for_app?(%URI{} = origin, slug) do
+    %{env: env, by_app: by_app} = patterns()
 
     not checks_enabled?() or matches_any?(env, origin) or
       matches_any?(Map.get(by_app, slug, []), origin)
