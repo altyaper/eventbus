@@ -45,18 +45,36 @@ if config_env() == :dev do
 end
 
 if config_env() == :prod do
-  database_url =
-    System.get_env("DATABASE_URL") ||
-      raise """
-      environment variable DATABASE_URL is missing.
-      For example: ecto://USER:PASS@HOST/DATABASE
-      """
+  # Either DATABASE_URL, or discrete DATABASE_HOST/POSTGRES_* vars (what
+  # docker-compose.yml passes). The discrete form never goes through URL
+  # parsing, so passwords with `/`, `+`, `@` etc. (e.g. base64 from
+  # `openssl rand -base64`) work without percent-encoding.
+  connection =
+    case System.get_env("DATABASE_URL") do
+      url when url not in [nil, ""] ->
+        [url: url]
+
+      _ ->
+        [
+          hostname:
+            System.get_env("DATABASE_HOST") ||
+              raise("""
+              environment variable DATABASE_URL or DATABASE_HOST is missing.
+              Set DATABASE_URL (ecto://USER:PASS@HOST/DATABASE) or
+              DATABASE_HOST plus POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB.
+              """),
+          username: System.fetch_env!("POSTGRES_USER"),
+          password: System.fetch_env!("POSTGRES_PASSWORD"),
+          database: System.fetch_env!("POSTGRES_DB")
+        ]
+    end
 
   maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
 
+  config :eventbus, Eventbus.Repo, connection
+
   config :eventbus, Eventbus.Repo,
     # ssl: true,
-    url: database_url,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
     # For machines with several cores, consider starting multiple pools of `pool_size`
     # pool_count: 4,
