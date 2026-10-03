@@ -162,6 +162,14 @@ defmodule EventbusWeb.Layouts do
         </div>
 
         <.link
+          :if={Scope.superadmin?(@current_scope)}
+          id="settings-link"
+          navigate={~p"/settings"}
+          class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-base-content/70 transition-colors hover:bg-base-content/5 hover:text-base-content"
+        >
+          <.icon name="hero-cog-6-tooth" class="size-4" /> Settings
+        </.link>
+        <.link
           id="log-out"
           href={~p"/logout"}
           method="delete"

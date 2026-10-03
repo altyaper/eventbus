@@ -58,6 +58,8 @@ defmodule EventbusWeb.UserAuth do
 
     * `:require_setup` - redirects to `/setup` while no user exists.
     * `:require_authenticated` - redirects to `/login` unless logged in.
+    * `:require_superadmin` - redirects to `/` unless the user is the
+      superadmin. Use after `:require_authenticated`.
     * `:redirect_if_authenticated` - sends logged-in users to `/`.
     * `:redirect_if_set_up` - keeps `/setup` reachable only before the
       first user exists.
@@ -84,6 +86,19 @@ defmodule EventbusWeb.UserAuth do
        socket
        |> Phoenix.LiveView.put_flash(:error, "Log in to continue.")
        |> Phoenix.LiveView.redirect(to: ~p"/login")}
+    end
+  end
+
+  def on_mount(:require_superadmin, _params, session, socket) do
+    socket = mount_current_scope(socket, session)
+
+    if Scope.superadmin?(socket.assigns.current_scope) do
+      {:cont, socket}
+    else
+      {:halt,
+       socket
+       |> Phoenix.LiveView.put_flash(:error, "Only the superadmin can open that page.")
+       |> Phoenix.LiveView.redirect(to: ~p"/")}
     end
   end
 

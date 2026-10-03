@@ -70,7 +70,8 @@ services:
       PHX_HOST: ${PHX_HOST:-raspberrypi.local}
       # Other hosts the UI is reached at, comma-separated (e.g. a domain behind
       # a reverse proxy plus the LAN IP). Without this, live updates only work
-      # when browsing via PHX_HOST.
+      # when browsing via PHX_HOST. Browser apps using /socket can instead be
+      # allowed by the superadmin at /settings, without a redeploy.
       PHX_EXTRA_ORIGINS: ${PHX_EXTRA_ORIGINS:-}
       PORT: "4000"
       # Optional. Leave unset to have a key generated on first boot and printed

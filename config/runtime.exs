@@ -105,19 +105,21 @@ if config_env() == :prod do
 
   config :eventbus, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
-  # Origins allowed to open the LiveView/Channels websockets: PHX_HOST plus
-  # any in PHX_EXTRA_ORIGINS (comma-separated), e.g. a public domain behind a
-  # reverse proxy alongside the Pi's LAN IP. "//host" matches any scheme/port.
+  # Origins always allowed to open the LiveView/Channels websockets: PHX_HOST
+  # plus any in PHX_EXTRA_ORIGINS (comma-separated), e.g. a public domain
+  # behind a reverse proxy alongside the Pi's LAN IP. The superadmin can allow
+  # more at /settings; see Eventbus.Origins for the pattern format.
   extra_origins =
     System.get_env("PHX_EXTRA_ORIGINS", "")
     |> String.split(",", trim: true)
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
-    |> Enum.map(fn origin -> if origin =~ "//", do: origin, else: "//" <> origin end)
+
+  config :eventbus, :env_origins, [host | extra_origins]
 
   config :eventbus, EventbusWeb.Endpoint,
     url: [host: host, port: String.to_integer(System.get_env("PORT", "4000")), scheme: "http"],
-    check_origin: ["//" <> host | extra_origins],
+    check_origin: {Eventbus.Origins, :allowed?, []},
     http: [
       # Enable IPv6 and bind on all interfaces.
       # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.

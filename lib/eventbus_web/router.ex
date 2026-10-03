@@ -44,6 +44,15 @@ defmodule EventbusWeb.Router do
       live "/", TopicsLive.Index
       live "/topics/:name", TopicShowLive
     end
+
+    live_session :superadmin,
+      on_mount: [
+        {EventbusWeb.UserAuth, :require_setup},
+        {EventbusWeb.UserAuth, :require_authenticated},
+        {EventbusWeb.UserAuth, :require_superadmin}
+      ] do
+      live "/settings", SettingsLive
+    end
   end
 
   scope "/api", EventbusWeb do
