@@ -24,7 +24,7 @@ defmodule EventbusWeb.UserAuth do
     |> clear_session()
     |> put_session(:user_token, token)
     |> put_session(:live_socket_id, live_socket_id(token))
-    |> redirect(to: ~p"/")
+    |> redirect(to: ~p"/apps")
   end
 
   @doc """
@@ -58,9 +58,9 @@ defmodule EventbusWeb.UserAuth do
 
     * `:require_setup` - redirects to `/setup` while no user exists.
     * `:require_authenticated` - redirects to `/login` unless logged in.
-    * `:require_superadmin` - redirects to `/` unless the user is the
+    * `:require_superadmin` - redirects to `/apps` unless the user is the
       superadmin. Use after `:require_authenticated`.
-    * `:redirect_if_authenticated` - sends logged-in users to `/`.
+    * `:redirect_if_authenticated` - sends logged-in users to `/apps`.
     * `:redirect_if_set_up` - keeps `/setup` reachable only before the
       first user exists.
 
@@ -98,7 +98,7 @@ defmodule EventbusWeb.UserAuth do
       {:halt,
        socket
        |> Phoenix.LiveView.put_flash(:error, "Only the superadmin can open that page.")
-       |> Phoenix.LiveView.redirect(to: ~p"/")}
+       |> Phoenix.LiveView.redirect(to: ~p"/apps")}
     end
   end
 
@@ -106,7 +106,7 @@ defmodule EventbusWeb.UserAuth do
     socket = mount_current_scope(socket, session)
 
     if socket.assigns.current_scope do
-      {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/")}
+      {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/apps")}
     else
       {:cont, socket}
     end

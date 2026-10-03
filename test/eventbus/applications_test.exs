@@ -63,14 +63,22 @@ defmodule Eventbus.ApplicationsTest do
     assert Topics.get_topic_by_name(other.name)
   end
 
-  test "list_apps_with_topics/0 sorts apps by slug and topics newest first" do
+  test "list_apps_with_topic_counts/0 sorts apps by slug and counts their topics" do
     topic_fixture(name: "zeta.a")
-    first = topic_fixture(name: "alpha.first")
-    second = topic_fixture(name: "alpha.second")
+    topic_fixture(name: "alpha.first")
+    topic_fixture(name: "alpha.second")
+    app_fixture(slug: "empty")
 
-    assert [%{slug: "alpha", topics: topics}, %{slug: "zeta"}] =
-             Applications.list_apps_with_topics()
+    assert [
+             %{slug: "alpha", topics_count: 2},
+             %{slug: "empty", topics_count: 0},
+             %{slug: "zeta", topics_count: 1}
+           ] = Applications.list_apps_with_topic_counts()
+  end
 
-    assert Enum.map(topics, & &1.id) |> Enum.sort() == Enum.sort([first.id, second.id])
+  test "get_app_by_slug/1" do
+    app = app_fixture(slug: "chat")
+    assert Applications.get_app_by_slug("chat").id == app.id
+    assert Applications.get_app_by_slug("nope") == nil
   end
 end
