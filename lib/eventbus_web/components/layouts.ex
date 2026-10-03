@@ -36,6 +36,7 @@ defmodule EventbusWeb.Layouts do
   def app(assigns) do
     ~H"""
     <div class="relative min-h-screen overflow-hidden">
+      <div aria-hidden="true" class="dot-field pointer-events-none fixed inset-0 -z-20" />
       <div
         aria-hidden="true"
         class="pointer-events-none absolute inset-x-0 -top-40 -z-10 h-[28rem] bg-gradient-to-b from-primary/15 via-primary/5 to-transparent blur-2xl"

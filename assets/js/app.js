@@ -40,6 +40,23 @@ window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 // connect if there are any LiveViews on the page
 liveSocket.connect()
 
+// Feed the cursor position to the .dot-field background (see app.css). Only
+// for mouse-like pointers; touch screens keep the static dots.
+if (matchMedia("(pointer: fine)").matches) {
+  const root = document.documentElement
+  let frame = null
+  window.addEventListener("pointermove", e => {
+    if (frame) return
+    frame = requestAnimationFrame(() => {
+      root.style.setProperty("--mx", `${e.clientX}px`)
+      root.style.setProperty("--my", `${e.clientY}px`)
+      root.classList.add("dot-field-active")
+      frame = null
+    })
+  })
+  document.addEventListener("pointerleave", () => root.classList.remove("dot-field-active"))
+}
+
 // expose liveSocket on window for web console debug logs and latency simulation:
 // >> liveSocket.enableDebug()
 // >> liveSocket.enableLatencySim(1000)  // enabled for duration of browser session

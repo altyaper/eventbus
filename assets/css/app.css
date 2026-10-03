@@ -103,3 +103,26 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 /* This file is for your main application CSS */
+
+/* Dot-grid page background. The base dots use the theme's text colour at low
+   opacity so they read on both themes; a second, primary-coloured copy of the
+   grid is masked to a soft circle around the cursor (--mx/--my, set in app.js). */
+.dot-field::before,
+.dot-field::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, var(--dot-color) 1px, transparent 1.5px) 0 0 / 22px 22px;
+}
+.dot-field::before {
+  --dot-color: color-mix(in oklch, var(--color-base-content) 9%, transparent);
+}
+.dot-field::after {
+  --dot-color: color-mix(in oklch, var(--color-primary) 70%, transparent);
+  mask-image: radial-gradient(circle 180px at var(--mx, -999px) var(--my, -999px), #000, transparent);
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+.dot-field-active .dot-field::after {
+  opacity: 1;
+}
