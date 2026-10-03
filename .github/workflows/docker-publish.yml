@@ -1,0 +1,58 @@
+# Builds the image and pushes it to Docker Hub on every push to main (and on
+# demand from the Actions tab). Same result as `make docker-push`.
+#
+# Needs two repo secrets (Settings → Secrets and variables → Actions):
+#   DOCKERHUB_USERNAME  your Docker Hub username
+#   DOCKERHUB_TOKEN     a Docker Hub access token with Read & Write scope
+name: Publish Docker image
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push to main supersedes an in-flight build.
+concurrency:
+  group: docker-publish
+  cancel-in-progress: true
+
+env:
+  IMAGE: jorgechavzns/eventbus
+
+jobs:
+  publish:
+    # Native arm64 runner (free for public repos): the Pi is aarch64, and
+    # building the BEAM under QEMU emulation crashes nondeterministically.
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # :latest plus an immutable :sha-<short> tag, so the Pi can pin or roll back.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest
+            type=sha
+
+      # No corporate proxy here, so docker/extra-ca.crt is absent and the
+      # Dockerfile's optional COPY of it is a no-op.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
