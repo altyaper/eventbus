@@ -68,6 +68,10 @@ services:
       # Required, 64+ bytes; the app refuses to boot otherwise (runtime.exs).
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
       PHX_HOST: ${PHX_HOST:-raspberrypi.local}
+      # Other hosts the UI is reached at, comma-separated (e.g. a domain behind
+      # a reverse proxy plus the LAN IP). Without this, live updates only work
+      # when browsing via PHX_HOST.
+      PHX_EXTRA_ORIGINS: ${PHX_EXTRA_ORIGINS:-}
       PORT: "4000"
       EVENTBUS_API_KEY: ${EVENTBUS_API_KEY:-dev-secret}
     ports:
