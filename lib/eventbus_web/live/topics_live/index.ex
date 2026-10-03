@@ -167,13 +167,65 @@ defmodule EventbusWeb.TopicsLive.Index do
                 autocomplete="off"
                 phx-debounce="300"
               />
-              <button
-                id="create-topic"
-                type="submit"
-                class="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-content shadow-sm transition-all hover:brightness-110 active:scale-[0.98] phx-submit-loading:opacity-60"
+              <%!-- The zone overhangs the button so the pull starts just before
+                   the cursor reaches it. JS-set offsets live in inline styles,
+                   so LiveView must leave this subtree alone. --%>
+              <div
+                id="create-topic-zone"
+                phx-hook=".Magnetic"
+                phx-update="ignore"
+                class="mag-zone -mx-3 -mb-3 p-3 pt-1"
               >
-                Create topic
-              </button>
+                <button
+                  id="create-topic"
+                  type="submit"
+                  class="mag-btn w-full rounded-full px-4 py-2.5 text-sm font-semibold text-primary-content shadow-md shadow-primary/25 phx-submit-loading:opacity-60"
+                >
+                  <span class="mag-label inline-flex items-center gap-2">
+                    <.icon name="hero-plus" class="size-4" /> Create topic
+                  </span>
+                </button>
+              </div>
+              <script :type={Phoenix.LiveView.ColocatedHook} name=".Magnetic">
+                // Magnetic button, after GreenSock's "Dynamic tweens" pen: the
+                // button leans toward the cursor and its label leans a little
+                // further; easing and the elastic snap-back are in app.css.
+                export default {
+                  mounted() {
+                    if (!matchMedia("(pointer: fine)").matches) return
+                    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return
+
+                    const zone = this.el
+                    const btn = zone.querySelector(".mag-btn")
+                    const label = zone.querySelector(".mag-label")
+                    const offset = (el, x, y) => {
+                      el.style.setProperty("--mag-x", `${x}px`)
+                      el.style.setProperty("--mag-y", `${y}px`)
+                    }
+
+                    this.onMove = e => {
+                      const r = zone.getBoundingClientRect()
+                      const x = e.clientX - (r.left + r.width / 2)
+                      const y = e.clientY - (r.top + r.height / 2)
+                      zone.classList.add("is-pulled")
+                      // The button is wide, so pull less on x than on y.
+                      offset(btn, x * 0.1, y * 0.35)
+                      offset(label, x * 0.06, y * 0.2)
+                    }
+                    this.onLeave = () => {
+                      zone.classList.remove("is-pulled")
+                      offset(btn, 0, 0)
+                      offset(label, 0, 0)
+                    }
+                    zone.addEventListener("pointermove", this.onMove)
+                    zone.addEventListener("pointerleave", this.onLeave)
+                  },
+                  destroyed() {
+                    this.el.removeEventListener("pointermove", this.onMove)
+                    this.el.removeEventListener("pointerleave", this.onLeave)
+                  }
+                }
+              </script>
             </.form>
           </div>
 

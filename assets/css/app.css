@@ -126,3 +126,24 @@
 .dot-field-active .dot-field::after {
   opacity: 1;
 }
+
+/* Magnetic "Create topic" button (hook in topics_live/index.ex). While the
+   cursor is in the zone, offsets ease out like GSAP's power2.out; on leave
+   they spring home with elastic.out(1, 0.4), sampled into linear(). */
+.mag-btn {
+  background: linear-gradient(114deg, var(--color-primary) 20%, color-mix(in oklch, var(--color-primary) 72%, white) 75%);
+  cursor: pointer;
+}
+.mag-btn,
+.mag-label {
+  transform: translate(var(--mag-x, 0), var(--mag-y, 0));
+  transition: transform 0.7s linear(0, 0.223, 0.5, 0.772, 1, 1.161, 1.25, 1.275, 1.25, 1.194, 1.125, 1.057, 1, 0.96, 0.938, 0.931, 0.938, 0.951, 0.969, 0.986, 1, 1.01, 1.016, 1.017, 1.016, 1.012, 1.008, 1.004, 1, 0.997, 0.996, 0.996, 0.996, 0.997, 0.998, 0.999, 1, 1.001, 1.001, 1.001, 1);
+  will-change: transform;
+}
+.mag-zone.is-pulled .mag-btn,
+.mag-zone.is-pulled .mag-label {
+  transition: transform 0.4s cubic-bezier(0.33, 1, 0.68, 1);
+}
+.mag-btn:active {
+  filter: brightness(0.95);
+}
