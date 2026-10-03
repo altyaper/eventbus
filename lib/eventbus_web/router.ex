@@ -12,18 +12,21 @@ defmodule EventbusWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug EventbusWeb.Plugs.RequireApiKey
   end
 
   scope "/", EventbusWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", TopicsLive.Index
+    live "/topics/:name", TopicShowLive
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", EventbusWeb do
-  #   pipe_through :api
-  # end
+  scope "/api", EventbusWeb do
+    pipe_through :api
+
+    post "/topics/:name/events", TopicEventController, :create
+  end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:eventbus, :dev_routes) do

@@ -20,6 +20,10 @@ if System.get_env("PHX_SERVER") do
   config :eventbus, EventbusWeb.Endpoint, server: true
 end
 
+# Shared secret required in the Authorization header to publish events over
+# HTTP. Defaults to a fixed dev value locally; set EVENTBUS_API_KEY in prod.
+config :eventbus, :api_key, System.get_env("EVENTBUS_API_KEY", "dev-secret")
+
 config :eventbus, EventbusWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
