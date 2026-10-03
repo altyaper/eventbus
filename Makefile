@@ -22,11 +22,18 @@ API_KEY      ?= dev-secret
 TOPIC        ?= example
 PAYLOAD      ?= {"hello":"world"}
 
+# Only present on machines building behind a TLS-intercepting corporate
+# proxy. Must be the full trust bundle (root + intercepting CA), not just
+# the intercepting cert alone — see Dockerfile for why `docker-build`
+# stages a copy of this.
+EXTRA_CA_SRC ?= $(HOME)/.cache/elixir-ca/os-trust.crt
+
 .PHONY: help setup install \
         start server console \
         db-create db-migrate db-rollback db-reset db-status db-console \
         db-up db-down db-stop db-logs \
-        build test format check routes publish clean
+        build test format check routes publish clean \
+        docker-build docker-up docker-down docker-logs docker-ps
 
 ## ---------------------------------------------------------------------------
 ## Help
@@ -134,3 +141,31 @@ publish: ## Publish a test event (TOPIC=name PAYLOAD='{"json":true}')
 
 clean: ## Remove build output and caches
 	rm -rf _build priv/static/assets priv/static/cache_manifest.json
+
+## ---------------------------------------------------------------------------
+## Docker (full app + its own Postgres, see docker-compose.yml)
+## ---------------------------------------------------------------------------
+
+# Something in this machine's environment sets DOCKER_DEFAULT_PLATFORM=
+# linux/amd64 outside any dotfile we could find, which silently builds under
+# Rosetta emulation on this arm64 Mac and causes flaky BEAM JIT crashes.
+# Force native arch here regardless of that ambient setting.
+DOCKER_DEFAULT_PLATFORM := linux/arm64
+export DOCKER_DEFAULT_PLATFORM
+
+docker-build: ## Build the app image (stages an extra CA cert if present, see Dockerfile)
+	@test -f "$(EXTRA_CA_SRC)" && cp "$(EXTRA_CA_SRC)" docker/extra-ca.crt \
+		|| rm -f docker/extra-ca.crt
+	docker compose build
+
+docker-up: docker-build ## Build and start the app + its own Postgres (needs .env, see docker.env.example)
+	docker compose up -d
+
+docker-down: ## Stop and remove the app + its Postgres containers
+	docker compose down
+
+docker-logs: ## Tail the app container logs
+	docker compose logs -f app
+
+docker-ps: ## Show status of the compose services
+	docker compose ps

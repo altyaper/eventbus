@@ -7,17 +7,10 @@ import Config
 # before starting your production server.
 config :eventbus, EventbusWeb.Endpoint, cache_static_manifest: "priv/static/cache_manifest.json"
 
-# Force using SSL in production. This also sets the "strict-security-transport" header,
-# known as HSTS. If you have a health check endpoint, you may want to exclude it below.
-# Note `:force_ssl` is required to be set at compile-time.
-config :eventbus, EventbusWeb.Endpoint,
-  force_ssl: [
-    rewrite_on: [:x_forwarded_proto],
-    exclude: [
-      # paths: ["/health"],
-      hosts: ["localhost", "127.0.0.1"]
-    ]
-  ]
+# force_ssl is left disabled: this app is deployed to a Raspberry Pi on the
+# LAN with no TLS termination in front of it, so forcing HTTPS would just
+# redirect-loop. Add a reverse proxy (e.g. Caddy) and re-enable this if that
+# changes.
 
 # Configure Swoosh API Client
 config :swoosh, api_client: Swoosh.ApiClient.Req

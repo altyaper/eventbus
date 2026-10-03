@@ -35,3 +35,10 @@ eventbus-*.tar
 npm-debug.log
 /assets/node_modules/
 
+# Docker Compose secrets (copied from docker.env.example)
+.env
+
+# Staged by `make docker-build` from ~/.cache/elixir-ca/os-trust.crt, only
+# needed to build behind a TLS-intercepting corporate proxy.
+docker/extra-ca.crt
+
