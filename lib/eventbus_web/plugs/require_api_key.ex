@@ -1,6 +1,7 @@
 defmodule EventbusWeb.Plugs.RequireApiKey do
   @moduledoc """
-  Requires `Authorization: Bearer <EVENTBUS_API_KEY>` on HTTP publish requests.
+  Requires `Authorization: Bearer <api key>` on HTTP publish requests (see
+  `Eventbus.Settings.api_key/0`).
   """
 
   import Plug.Conn
@@ -8,7 +9,7 @@ defmodule EventbusWeb.Plugs.RequireApiKey do
   def init(opts), do: opts
 
   def call(conn, _opts) do
-    expected_key = Application.fetch_env!(:eventbus, :api_key)
+    expected_key = Eventbus.Settings.api_key()
 
     with ["Bearer " <> given_key] <- get_req_header(conn, "authorization"),
          true <- Plug.Crypto.secure_compare(given_key, expected_key) do

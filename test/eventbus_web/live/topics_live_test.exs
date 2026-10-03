@@ -4,6 +4,8 @@ defmodule EventbusWeb.TopicsLiveTest do
   import Phoenix.LiveViewTest
   import Eventbus.TopicsFixtures
 
+  setup :register_and_log_in_user
+
   test "lists existing topics", %{conn: conn} do
     topic = topic_fixture()
 

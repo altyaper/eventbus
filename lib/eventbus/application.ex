@@ -12,8 +12,8 @@ defmodule Eventbus.Application do
       Eventbus.Repo,
       {DNSCluster, query: Application.get_env(:eventbus, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Eventbus.PubSub},
-      # Start a worker by calling: Eventbus.Worker.start_link(arg)
-      # {Eventbus.Worker, arg},
+      # Resolves (or generates) the API key before we serve requests
+      Eventbus.Settings,
       # Start to serve requests, typically the last entry
       EventbusWeb.Endpoint
     ]

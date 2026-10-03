@@ -61,7 +61,7 @@ defmodule EventbusWeb.TopicsLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_scope={@current_scope}>
       <section id="hero" class="mb-10 sm:mb-14">
         <span class="inline-flex items-center gap-2 rounded-full border border-base-content/10 bg-base-100/60 px-3 py-1 text-xs font-medium text-base-content/70">
           <span class="relative flex size-2">

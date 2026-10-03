@@ -13,9 +13,16 @@ Ready to run in production? Please [check our deployment guides](https://phoenix
 
 ```
 cp docker.env.example .env
-# edit .env: set SECRET_KEY_BASE (mix phx.gen.secret), PHX_HOST, EVENTBUS_API_KEY, POSTGRES_PASSWORD
+# edit .env: set SECRET_KEY_BASE (mix phx.gen.secret), PHX_HOST, POSTGRES_PASSWORD
 docker compose up -d --build
 ```
+
+**First run:** open the app and you land on `/setup`, which creates the superadmin account.
+It asks for the server's API key as proof you own the install. Unless you set
+`EVENTBUS_API_KEY` yourself, a key is generated on first boot, stored in the database and
+printed in the logs until setup is done (`docker compose logs app`). Afterwards the
+superadmin can copy it from the user menu. The same key authorizes
+`POST /api/topics/:name/events`.
 
 Build this directly on the target machine so Docker picks the right CPU architecture
 automatically (no cross-compilation needed). The app runs plain HTTP on the LAN

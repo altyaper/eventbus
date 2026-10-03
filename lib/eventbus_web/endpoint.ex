@@ -8,7 +8,9 @@ defmodule EventbusWeb.Endpoint do
     store: :cookie,
     key: "_eventbus_key",
     signing_salt: "OZxvL85T",
-    same_site: "Lax"
+    same_site: "Lax",
+    # Keep logins across browser restarts; matches the session token validity
+    max_age: 60 * 24 * 60 * 60
   ]
 
   socket "/live", Phoenix.LiveView.Socket,

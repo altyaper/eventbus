@@ -1,6 +1,8 @@
 defmodule EventbusWeb.Router do
   use EventbusWeb, :router
 
+  import EventbusWeb.UserAuth, only: [fetch_current_scope: 2]
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -8,6 +10,7 @@ defmodule EventbusWeb.Router do
     plug :put_root_layout, html: {EventbusWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug :fetch_current_scope
   end
 
   pipeline :api do
@@ -18,8 +21,29 @@ defmodule EventbusWeb.Router do
   scope "/", EventbusWeb do
     pipe_through :browser
 
-    live "/", TopicsLive.Index
-    live "/topics/:name", TopicShowLive
+    live_session :setup, on_mount: [{EventbusWeb.UserAuth, :redirect_if_set_up}] do
+      live "/setup", SetupLive
+    end
+
+    live_session :login,
+      on_mount: [
+        {EventbusWeb.UserAuth, :require_setup},
+        {EventbusWeb.UserAuth, :redirect_if_authenticated}
+      ] do
+      live "/login", LoginLive
+    end
+
+    post "/login", SessionController, :create
+    delete "/logout", SessionController, :delete
+
+    live_session :authenticated,
+      on_mount: [
+        {EventbusWeb.UserAuth, :require_setup},
+        {EventbusWeb.UserAuth, :require_authenticated}
+      ] do
+      live "/", TopicsLive.Index
+      live "/topics/:name", TopicShowLive
+    end
   end
 
   scope "/api", EventbusWeb do

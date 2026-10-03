@@ -3,6 +3,8 @@ defmodule EventbusWeb.TopicShowLiveTest do
 
   import Phoenix.LiveViewTest
 
+  setup :register_and_log_in_user
+
   alias Eventbus.Events
 
   test "renders a pushed PubSub event while listening", %{conn: conn} do

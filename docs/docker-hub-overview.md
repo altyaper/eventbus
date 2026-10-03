@@ -48,7 +48,6 @@ services:
       DATABASE_URL: ecto://eventbus:change-me@db/eventbus_prod
       SECRET_KEY_BASE: <64+ random chars>
       PHX_HOST: raspberrypi.local
-      EVENTBUS_API_KEY: <your shared secret>
     ports:
       - "4000:4000"
 
@@ -79,11 +78,15 @@ docker run -d --name eventbus \
   -e DATABASE_URL=ecto://USER:PASS@HOST/eventbus_prod \
   -e SECRET_KEY_BASE="$(openssl rand -base64 48)" \
   -e PHX_HOST=192.168.1.50 \
-  -e EVENTBUS_API_KEY=change-me \
   jorgechavzns/eventbus:latest
 ```
 
 The database must already exist. eventbus creates its own tables on startup.
+
+**First run:** open the app and you land on `/setup`, which creates the superadmin account. It
+asks for the API key, which is generated on first boot and printed in the container logs
+(`docker logs eventbus`) until setup is done. Afterwards the superadmin can copy it from the user
+menu.
 
 ---
 
@@ -93,13 +96,11 @@ The database must already exist. eventbus creates its own tables on startup.
 | ------------------ | -------- | ------------- | --------------------------------------------------------------------------- |
 | `DATABASE_URL`     | yes      | —             | Postgres URL, e.g. `ecto://user:pass@db/eventbus_prod`                      |
 | `SECRET_KEY_BASE`  | yes      | —             | Signs cookies and sessions. At least 64 random characters.                  |
-| `EVENTBUS_API_KEY` | yes\*    | `dev-secret`  | Bearer token required to publish over HTTP. **Always override this.**       |
+| `EVENTBUS_API_KEY` | no       | generated     | Bearer token for HTTP publishing and `/setup`. Generated and stored on first boot if unset. |
 | `PHX_HOST`         | no       | `example.com` | Hostname or IP clients use to reach the app. Used for URLs and origin checks. |
 | `PORT`             | no       | `4000`        | HTTP port inside the container                                              |
 | `POOL_SIZE`        | no       | `10`          | Database connection pool size                                               |
 | `ECTO_IPV6`        | no       | unset         | Set to `true` to connect to Postgres over IPv6                              |
-
-\* The image starts without it, but the fallback is a well-known value.
 
 ---
 

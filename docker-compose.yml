@@ -73,7 +73,9 @@ services:
       # when browsing via PHX_HOST.
       PHX_EXTRA_ORIGINS: ${PHX_EXTRA_ORIGINS:-}
       PORT: "4000"
-      EVENTBUS_API_KEY: ${EVENTBUS_API_KEY:-dev-secret}
+      # Optional. Leave unset to have a key generated on first boot and printed
+      # in the logs (docker compose logs app) until setup at /setup is done.
+      EVENTBUS_API_KEY: ${EVENTBUS_API_KEY:-}
     ports:
       - "4000:4000"
 

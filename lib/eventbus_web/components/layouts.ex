@@ -5,6 +5,8 @@ defmodule EventbusWeb.Layouts do
   """
   use EventbusWeb, :html
 
+  alias Eventbus.Accounts.Scope
+
   # Embed all files in layouts/* within this module.
   # The default root.html.heex file contains the HTML
   # skeleton of your application, namely HTML headers
@@ -53,12 +55,14 @@ defmodule EventbusWeb.Layouts do
 
           <nav class="flex items-center gap-2 sm:gap-4">
             <.link
+              :if={@current_scope}
               navigate={~p"/"}
               class="rounded-md px-3 py-1.5 text-sm font-medium text-base-content/70 transition-colors hover:bg-base-content/5 hover:text-base-content"
             >
               Topics
             </.link>
             <.theme_toggle />
+            <.user_menu :if={@current_scope} current_scope={@current_scope} />
           </nav>
         </div>
       </header>
@@ -71,6 +75,133 @@ defmodule EventbusWeb.Layouts do
     </div>
 
     <.flash_group flash={@flash} />
+    """
+  end
+
+  @doc """
+  The logged-in user's menu: username, role, the API key (superadmin only)
+  and log out.
+  """
+  attr :current_scope, Eventbus.Accounts.Scope, required: true
+
+  def user_menu(assigns) do
+    ~H"""
+    <div class="relative" phx-click-away={JS.hide(to: "#user-menu-panel", transition: menu_out())}>
+      <button
+        id="user-menu-button"
+        type="button"
+        phx-click={JS.toggle(to: "#user-menu-panel", in: menu_in(), out: menu_out())}
+        class="flex items-center gap-2 rounded-full border border-base-content/10 py-1 pr-3 pl-1 text-sm font-medium transition-colors hover:border-base-content/20 hover:bg-base-content/5"
+      >
+        <span class="grid size-7 place-items-center rounded-full bg-primary/15 text-xs font-semibold uppercase text-primary">
+          {String.first(@current_scope.user.username)}
+        </span>
+        <span class="hidden sm:inline">{@current_scope.user.username}</span>
+        <.icon name="hero-chevron-down-micro" class="size-4 text-base-content/50" />
+      </button>
+
+      <div
+        id="user-menu-panel"
+        class="absolute right-0 z-30 mt-2 hidden w-80 origin-top-right rounded-2xl border border-base-content/10 bg-base-100 p-2 shadow-xl shadow-base-content/10"
+      >
+        <div class="flex items-center justify-between px-3 py-2">
+          <div class="min-w-0">
+            <p class="truncate text-sm font-semibold">{@current_scope.user.username}</p>
+            <p class="text-xs text-base-content/50">Signed in</p>
+          </div>
+          <span
+            id="user-role"
+            class="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
+          >
+            {@current_scope.user.role}
+          </span>
+        </div>
+
+        <div
+          :if={Scope.superadmin?(@current_scope)}
+          id="api-key-panel"
+          class="mx-1 my-1 rounded-xl bg-base-content/5 p-3"
+        >
+          <p class="text-xs font-medium text-base-content/60">API key</p>
+          <div class="mt-1.5 flex items-center gap-2">
+            <code
+              id="api-key-value"
+              class="min-w-0 flex-1 truncate font-mono text-xs blur-sm transition-[filter] duration-200 hover:blur-none"
+              title="Hover to reveal"
+            >{Eventbus.Settings.api_key()}</code>
+            <button
+              id="copy-api-key"
+              type="button"
+              phx-hook=".CopyApiKey"
+              data-copy-target="#api-key-value"
+              class="shrink-0 rounded-md p-1.5 text-base-content/60 transition-colors hover:bg-base-content/10 hover:text-base-content"
+              aria-label="Copy API key"
+            >
+              <.icon name="hero-clipboard-document" class="size-4 copy-idle" />
+              <.icon name="hero-check" class="hidden size-4 text-success copy-done" />
+            </button>
+            <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyApiKey">
+              export default {
+                mounted() {
+                  this.el.addEventListener("click", () => {
+                    const text = document.querySelector(this.el.dataset.copyTarget).textContent.trim()
+                    navigator.clipboard.writeText(text).then(() => {
+                      this.el.querySelector(".copy-idle").classList.add("hidden")
+                      this.el.querySelector(".copy-done").classList.remove("hidden")
+                      clearTimeout(this.timer)
+                      this.timer = setTimeout(() => {
+                        this.el.querySelector(".copy-idle").classList.remove("hidden")
+                        this.el.querySelector(".copy-done").classList.add("hidden")
+                      }, 1500)
+                    })
+                  })
+                }
+              }
+            </script>
+          </div>
+        </div>
+
+        <.link
+          id="log-out"
+          href={~p"/logout"}
+          method="delete"
+          class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-base-content/70 transition-colors hover:bg-base-content/5 hover:text-base-content"
+        >
+          <.icon name="hero-arrow-right-start-on-rectangle" class="size-4" /> Log out
+        </.link>
+      </div>
+    </div>
+    """
+  end
+
+  defp menu_in,
+    do: {"transition ease-out duration-150", "opacity-0 scale-95", "opacity-100 scale-100"}
+
+  defp menu_out,
+    do: {"transition ease-in duration-100", "opacity-100 scale-100", "opacity-0 scale-95"}
+
+  @doc """
+  Centered card used by the setup and login pages.
+  """
+  attr :icon, :string, required: true
+  attr :title, :string, required: true
+  slot :subtitle
+  slot :inner_block, required: true
+
+  def auth_card(assigns) do
+    ~H"""
+    <div class="mx-auto mt-4 max-w-md sm:mt-10">
+      <div class="rounded-3xl border border-base-content/10 bg-base-100/90 p-6 shadow-xl shadow-base-content/5 backdrop-blur sm:p-8">
+        <span class="grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-content shadow-md shadow-primary/30">
+          <.icon name={@icon} class="size-6" />
+        </span>
+        <h1 class="mt-5 text-2xl font-semibold tracking-tight">{@title}</h1>
+        <p :if={@subtitle != []} class="mt-1.5 text-sm text-base-content/60">
+          {render_slot(@subtitle)}
+        </p>
+        <div class="mt-6">{render_slot(@inner_block)}</div>
+      </div>
+    </div>
     """
   end
 
