@@ -15,12 +15,31 @@ defmodule EventbusWeb.TopicShowLiveTest do
     :ok
   end
 
-  test "an unknown topic redirects to the applications page", %{conn: conn} do
-    assert {:error, {:live_redirect, %{to: "/"}}} = live(conn, ~p"/topics/test.nope")
+  test "an unknown topic redirects to its app's topics", %{conn: conn} do
+    assert {:error, {:live_redirect, %{to: "/apps/test/topics"}}} =
+             live(conn, ~p"/apps/test/topics/test.nope")
+  end
+
+  test "another app's topic redirects to this app's topics", %{conn: conn} do
+    topic_fixture(name: "other.lobby")
+
+    assert {:error, {:live_redirect, %{to: "/apps/test/topics"}}} =
+             live(conn, ~p"/apps/test/topics/other.lobby")
+  end
+
+  test "an unknown app redirects to My Apps", %{conn: conn} do
+    assert {:error, {:live_redirect, %{to: "/apps"}}} = live(conn, ~p"/apps/nope/topics/nope.x")
+  end
+
+  test "shows the topic inside its app", %{conn: conn} do
+    {:ok, live, _html} = live(conn, ~p"/apps/test/topics/test.live-test-topic")
+
+    assert has_element?(live, "#breadcrumb", "test.live-test-topic")
+    assert has_element?(live, "#section-topics[aria-current=page]")
   end
 
   test "renders a pushed PubSub event while listening", %{conn: conn} do
-    {:ok, live, _html} = live(conn, ~p"/topics/test.live-test-topic")
+    {:ok, live, _html} = live(conn, ~p"/apps/test/topics/test.live-test-topic")
 
     live |> element("button", "Start listening") |> render_click()
 
@@ -30,7 +49,7 @@ defmodule EventbusWeb.TopicShowLiveTest do
   end
 
   test "the Start/Stop toggle stops new events from rendering", %{conn: conn} do
-    {:ok, live, _html} = live(conn, ~p"/topics/test.toggle-test-topic")
+    {:ok, live, _html} = live(conn, ~p"/apps/test/topics/test.toggle-test-topic")
 
     live |> element("button", "Start listening") |> render_click()
     live |> element("button", "Stop listening") |> render_click()
@@ -41,7 +60,7 @@ defmodule EventbusWeb.TopicShowLiveTest do
   end
 
   test "the test-publish form round-trips through Events.publish/2", %{conn: conn} do
-    {:ok, live, _html} = live(conn, ~p"/topics/test.publish-test-topic")
+    {:ok, live, _html} = live(conn, ~p"/apps/test/topics/test.publish-test-topic")
 
     live |> element("button", "Start listening") |> render_click()
 

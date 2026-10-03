@@ -9,8 +9,8 @@ defmodule EventbusWeb.LoginLiveTest do
   end
 
   test "protected pages redirect to /login when logged out", %{conn: conn} do
-    assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/")
-    assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/topics/some-topic")
+    assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/apps")
+    assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/apps/some/topics/some.topic")
   end
 
   test "renders the login form", %{conn: conn} do
@@ -22,10 +22,10 @@ defmodule EventbusWeb.LoginLiveTest do
     conn =
       post(conn, ~p"/login", user: %{username: "jorge", password: valid_password()})
 
-    assert redirected_to(conn) == ~p"/"
+    assert redirected_to(conn) == ~p"/apps"
     assert get_session(conn, :user_token)
 
-    {:ok, live, _html} = live(conn, ~p"/")
+    {:ok, live, _html} = live(conn, ~p"/apps")
     assert has_element?(live, "#user-menu-button", "jorge")
   end
 
@@ -39,7 +39,7 @@ defmodule EventbusWeb.LoginLiveTest do
 
   test "redirects logged-in users away from /login", %{conn: conn, user: user} do
     conn = log_in_user(conn, user)
-    assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/login")
+    assert {:error, {:redirect, %{to: "/apps"}}} = live(conn, ~p"/login")
   end
 
   test "logging out ends the session", %{conn: conn, user: user} do

@@ -5,8 +5,6 @@ defmodule EventbusWeb.Layouts do
   """
   use EventbusWeb, :html
 
-  alias Eventbus.Accounts.Scope
-
   # Embed all files in layouts/* within this module.
   # The default root.html.heex file contains the HTML
   # skeleton of your application, namely HTML headers
@@ -33,6 +31,8 @@ defmodule EventbusWeb.Layouts do
     default: nil,
     doc: "the current [scope](https://phoenix.hexdocs.pm/scopes.html)"
 
+  attr :nav, :atom, default: nil, doc: "the highlighted top-menu entry, e.g. `:apps`"
+
   slot :inner_block, required: true
 
   def app(assigns) do
@@ -46,7 +46,7 @@ defmodule EventbusWeb.Layouts do
 
       <header class="sticky top-0 z-20 border-b border-base-content/5 bg-base-100/70 backdrop-blur-md">
         <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <.link navigate={~p"/"} id="brand" class="group flex items-center gap-2.5">
+          <.link navigate={~p"/apps"} id="brand" class="group flex items-center gap-2.5">
             <span class="grid size-8 place-items-center rounded-lg bg-gradient-to-br from-primary to-accent text-primary-content shadow-sm shadow-primary/30 transition-transform duration-300 group-hover:rotate-6 group-hover:scale-105">
               <.icon name="hero-bolt-solid" class="size-4" />
             </span>
@@ -56,10 +56,18 @@ defmodule EventbusWeb.Layouts do
           <nav class="flex items-center gap-2 sm:gap-4">
             <.link
               :if={@current_scope}
-              navigate={~p"/"}
-              class="rounded-md px-3 py-1.5 text-sm font-medium text-base-content/70 transition-colors hover:bg-base-content/5 hover:text-base-content"
+              id="nav-apps"
+              navigate={~p"/apps"}
+              aria-current={@nav == :apps && "page"}
+              class={[
+                "flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                if(@nav == :apps,
+                  do: "bg-primary/10 text-primary",
+                  else: "text-base-content/70 hover:bg-base-content/5 hover:text-base-content"
+                )
+              ]}
             >
-              Topics
+              <.icon name="hero-squares-2x2-micro" class="hidden size-4 sm:inline-block" /> My Apps
             </.link>
             <.theme_toggle />
             <.user_menu :if={@current_scope} current_scope={@current_scope} />
@@ -79,8 +87,7 @@ defmodule EventbusWeb.Layouts do
   end
 
   @doc """
-  The logged-in user's menu: username, role, settings (superadmin only)
-  and log out.
+  The logged-in user's menu: username, role and log out.
   """
   attr :current_scope, Eventbus.Accounts.Scope, required: true
 
@@ -117,14 +124,6 @@ defmodule EventbusWeb.Layouts do
           </span>
         </div>
 
-        <.link
-          :if={Scope.superadmin?(@current_scope)}
-          id="settings-link"
-          navigate={~p"/settings"}
-          class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-base-content/70 transition-colors hover:bg-base-content/5 hover:text-base-content"
-        >
-          <.icon name="hero-cog-6-tooth" class="size-4" /> Settings
-        </.link>
         <.link
           id="log-out"
           href={~p"/logout"}

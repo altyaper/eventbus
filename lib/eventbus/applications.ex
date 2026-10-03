@@ -11,17 +11,26 @@ defmodule Eventbus.Applications do
 
   alias Eventbus.Repo
   alias Eventbus.Applications.App
-  alias Eventbus.Topics.Topic
 
   @doc """
-  All applications sorted by slug, with their topics preloaded newest first.
+  All applications sorted by slug, each with `:topics_count` set.
   """
-  def list_apps_with_topics do
-    topics = from t in Topic, order_by: [desc: t.inserted_at, desc: t.id]
-    Repo.all(from a in App, order_by: a.slug, preload: [topics: ^topics])
+  def list_apps_with_topic_counts do
+    Repo.all(
+      from a in App,
+        left_join: t in assoc(a, :topics),
+        group_by: a.id,
+        order_by: a.slug,
+        select: %{a | topics_count: count(t.id)}
+    )
   end
 
   def get_app!(id), do: Repo.get!(App, id)
+
+  @doc """
+  Gets an application by slug, or `nil`.
+  """
+  def get_app_by_slug(slug), do: Repo.get_by(App, slug: slug)
 
   def change_app(%App{} = app, attrs \\ %{}), do: App.create_changeset(app, attrs)
 
@@ -58,9 +67,15 @@ defmodule Eventbus.Applications do
   end
 
   @doc """
-  Deletes the application and, through the foreign key, all its topics.
+  Deletes the application and, through the foreign keys, all its topics and
+  allowed origins.
   """
-  def delete_app(%App{} = app), do: Repo.delete(app)
+  def delete_app(%App{} = app) do
+    with {:ok, app} <- Repo.delete(app) do
+      Eventbus.Origins.refresh_cache()
+      {:ok, app}
+    end
+  end
 
   @doc """
   Returns `{:ok, app}` when the client id and secret match, `:error`

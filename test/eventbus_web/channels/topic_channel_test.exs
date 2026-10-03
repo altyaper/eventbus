@@ -1,7 +1,9 @@
 defmodule EventbusWeb.TopicChannelTest do
   use EventbusWeb.ChannelCase
 
-  alias Eventbus.Topics
+  import Eventbus.ApplicationsFixtures
+
+  alias Eventbus.{Origins, Topics}
 
   setup do
     {:ok, _, socket} =
@@ -38,5 +40,38 @@ defmodule EventbusWeb.TopicChannelTest do
 
     assert_receive {:EXIT, _pid, _reason}
     refute_push "event", _
+  end
+
+  describe "origins" do
+    setup do
+      on_exit(fn -> :persistent_term.erase({Origins, :patterns}) end)
+      app = app_fixture(slug: "changologs")
+      {:ok, _} = Origins.create_allowed_origin(app, %{origin: "https://changologs.com"})
+      :ok
+    end
+
+    defp join_from(origin, topic) do
+      EventbusWeb.UserSocket
+      |> socket("user_id", %{origin: origin && URI.parse(origin)})
+      |> subscribe_and_join(EventbusWeb.TopicChannel, "topic:" <> topic)
+    end
+
+    test "an app's origin may join its topics" do
+      assert {:ok, _, _} = join_from("https://changologs.com", "changologs.logs")
+    end
+
+    test "an app's origin may not join another app's topics" do
+      assert {:error, %{reason: "origin not allowed"}} =
+               join_from("https://changologs.com", "chat.lobby")
+    end
+
+    test "an unknown origin may not join" do
+      assert {:error, %{reason: "origin not allowed"}} =
+               join_from("https://evil.example", "changologs.logs")
+    end
+
+    test "sockets without an origin may join any topic" do
+      assert {:ok, _, _} = join_from(nil, "chat.lobby")
+    end
   end
 end

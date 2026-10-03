@@ -18,6 +18,17 @@ defmodule Eventbus.Topics do
   end
 
   @doc """
+  `app`'s topics, newest first.
+  """
+  def list_app_topics(%App{id: app_id}) do
+    Repo.all(
+      from t in Topic,
+        where: t.application_id == ^app_id,
+        order_by: [desc: t.inserted_at, desc: t.id]
+    )
+  end
+
+  @doc """
   Gets a single topic.
 
   Raises `Ecto.NoResultsError` if the Topic does not exist.

@@ -33,6 +33,7 @@ defmodule EventbusWeb.Router do
       live "/login", LoginLive
     end
 
+    get "/", HomeController, :index
     post "/login", SessionController, :create
     delete "/logout", SessionController, :delete
 
@@ -41,17 +42,13 @@ defmodule EventbusWeb.Router do
         {EventbusWeb.UserAuth, :require_setup},
         {EventbusWeb.UserAuth, :require_authenticated}
       ] do
-      live "/", TopicsLive.Index
-      live "/topics/:name", TopicShowLive
-    end
-
-    live_session :superadmin,
-      on_mount: [
-        {EventbusWeb.UserAuth, :require_setup},
-        {EventbusWeb.UserAuth, :require_authenticated},
-        {EventbusWeb.UserAuth, :require_superadmin}
-      ] do
-      live "/settings", SettingsLive
+      live "/apps", AppsLive
+      live "/apps/:slug", AppLive, :index
+      live "/apps/:slug/topics", AppLive, :topics
+      live "/apps/:slug/credentials", AppLive, :credentials
+      live "/apps/:slug/origins", AppLive, :origins
+      live "/apps/:slug/settings", AppLive, :settings
+      live "/apps/:slug/topics/:name", TopicShowLive
     end
   end
 

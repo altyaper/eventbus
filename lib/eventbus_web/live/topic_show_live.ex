@@ -1,26 +1,43 @@
 defmodule EventbusWeb.TopicShowLive do
+  @moduledoc """
+  One topic inside its app: watch its events live and publish test events.
+  """
+
   use EventbusWeb, :live_view
 
-  alias Eventbus.{Events, Topics}
+  import EventbusWeb.AppComponents
+
+  alias Eventbus.{Applications, Events, Topics}
+  alias Eventbus.Accounts.Scope
 
   @max_events 100
 
   @impl true
-  def mount(%{"name" => name}, _session, socket) do
-    # Topics belong to applications now, so the page no longer creates them.
-    if Topics.get_topic_by_name(name) do
+  def mount(%{"slug" => slug, "name" => name}, _session, socket) do
+    # Topics belong to applications, so the page never creates them.
+    with {:app, app} when not is_nil(app) <- {:app, Applications.get_app_by_slug(slug)},
+         %{application_id: app_id} when app_id == app.id <- Topics.get_topic_by_name(name) do
       {:ok,
        socket
        |> assign(:page_title, name)
+       |> assign(:app, app)
+       |> assign(:superadmin?, Scope.superadmin?(socket.assigns.current_scope))
        |> assign(:name, name)
        |> assign(:listening, false)
        |> assign(:events, [])
        |> assign_payload_form(%{"payload" => ""})}
     else
-      {:ok,
-       socket
-       |> put_flash(:error, "Topic #{name} doesn't exist.")
-       |> push_navigate(to: ~p"/")}
+      {:app, nil} ->
+        {:ok,
+         socket
+         |> put_flash(:error, "There's no application #{slug}.")
+         |> push_navigate(to: ~p"/apps")}
+
+      _missing_or_other_app ->
+        {:ok,
+         socket
+         |> put_flash(:error, "Topic #{name} doesn't exist in #{slug}.")
+         |> push_navigate(to: ~p"/apps/#{slug}/topics")}
     end
   end
 
@@ -65,12 +82,12 @@ defmodule EventbusWeb.TopicShowLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="mx-auto max-w-3xl">
+    <Layouts.app flash={@flash} current_scope={@current_scope} nav={:apps}>
+      <.app_shell app={@app} active={:topics} superadmin?={@superadmin?} crumb={@name}>
         <.header>
-          {@name}
+          <span class="font-mono">{@name}</span>
           <:subtitle>
-            <.link navigate={~p"/"}>&larr; All topics</.link>
+            <.link navigate={~p"/apps/#{@app.slug}/topics"}>&larr; All {@app.slug} topics</.link>
           </:subtitle>
           <:actions>
             <.button phx-click="toggle_listening" variant="primary">
@@ -103,7 +120,7 @@ defmodule EventbusWeb.TopicShowLive do
             <pre class="text-sm whitespace-pre-wrap">{Jason.encode!(event["payload"], pretty: true)}</pre>
           </div>
         </div>
-      </div>
+      </.app_shell>
     </Layouts.app>
     """
   end

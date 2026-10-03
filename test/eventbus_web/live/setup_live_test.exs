@@ -19,7 +19,7 @@ defmodule EventbusWeb.SetupLiveTest do
   end
 
   test "pages redirect to /setup while no user exists", %{conn: conn} do
-    assert {:error, {:redirect, %{to: "/setup"}}} = live(conn, ~p"/")
+    assert {:error, {:redirect, %{to: "/setup"}}} = live(conn, ~p"/apps")
     assert {:error, {:redirect, %{to: "/setup"}}} = live(conn, ~p"/login")
   end
 
@@ -43,7 +43,7 @@ defmodule EventbusWeb.SetupLiveTest do
     assert Accounts.any_users?()
 
     conn = follow_trigger_action(form, conn)
-    assert redirected_to(conn) == ~p"/"
+    assert redirected_to(conn) == ~p"/apps"
     assert get_session(conn, :user_token)
   end
 
