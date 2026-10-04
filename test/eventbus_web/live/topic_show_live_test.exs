@@ -38,6 +38,13 @@ defmodule EventbusWeb.TopicShowLiveTest do
     assert has_element?(live, "#section-topics[aria-current=page]")
   end
 
+  test "links back to the topic's group", %{conn: conn} do
+    topic_fixture(name: "test.board.abc")
+    {:ok, live, _html} = live(conn, ~p"/apps/test/topics/test.board.abc")
+
+    assert has_element?(live, ~s(#topic-back[href="/apps/test/topics?group=board"]))
+  end
+
   test "renders a pushed PubSub event while listening", %{conn: conn} do
     {:ok, live, _html} = live(conn, ~p"/apps/test/topics/test.live-test-topic")
 

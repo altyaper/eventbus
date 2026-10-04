@@ -29,6 +29,35 @@ defmodule Eventbus.Topics do
   end
 
   @doc """
+  One level of `app`'s topic tree, treating `.` in names as a separator.
+  `group` is the path below the slug (`"board"` for `"<slug>.board.*"`), or
+  `""` for the top.
+
+  Returns `%{groups: [{segment, count}], topics: [topic]}`: the next segments
+  that have topics under them, with how many, and the topics that end at this
+  level. A name can be both a topic and a group (`chat.board` next to
+  `chat.board.x`), so it shows up in both.
+  """
+  def list_app_topic_level(%App{} = app, group) do
+    prefix = Enum.join([app.slug | String.split(group, ".", trim: true)], ".") <> "."
+
+    {nested, topics} =
+      app
+      |> list_app_topics()
+      |> Enum.filter(&String.starts_with?(&1.name, prefix))
+      |> Enum.split_with(&String.contains?(String.replace_prefix(&1.name, prefix, ""), "."))
+
+    groups =
+      nested
+      |> Enum.frequencies_by(fn topic ->
+        topic.name |> String.replace_prefix(prefix, "") |> String.split(".", parts: 2) |> hd()
+      end)
+      |> Enum.sort()
+
+    %{groups: groups, topics: topics}
+  end
+
+  @doc """
   Gets a single topic.
 
   Raises `Ecto.NoResultsError` if the Topic does not exist.

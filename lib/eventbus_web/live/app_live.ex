@@ -61,13 +61,15 @@ defmodule EventbusWeb.AppLive do
     end
   end
 
-  defp load_section(socket, :topics, _uri) do
-    topics = Topics.list_app_topics(socket.assigns.app)
+  defp load_section(socket, :topics, uri) do
+    query = URI.parse(uri).query || ""
+    group = Map.get(URI.decode_query(query), "group", "")
+    group = if Topics.valid_name?(group), do: group, else: ""
 
     socket
-    |> assign(:topics_count, length(topics))
+    |> assign(:topic_group, group)
     |> assign(:topic_form, topic_form(%{"name" => ""}))
-    |> stream(:topics, topics, reset: true)
+    |> load_topic_level()
   end
 
   # The secret is only ever shown right after regenerating, never on return.
@@ -109,13 +111,12 @@ defmodule EventbusWeb.AppLive do
     app = socket.assigns.app
 
     with [] <- topic_errors(socket, params),
-         {:ok, topic} <- Topics.create_topic(app, %{name: full_name(app.slug, params["name"])}) do
+         {:ok, topic} <- Topics.create_topic(app, %{name: topic_name(socket, params["name"])}) do
       {:noreply,
        socket
        |> put_flash(:info, "Created #{topic.name}.")
        |> assign(:topic_form, topic_form(%{"name" => ""}))
-       |> assign(:topics_count, socket.assigns.topics_count + 1)
-       |> stream_insert(:topics, topic, at: 0)}
+       |> load_topic_level()}
     else
       errors when is_list(errors) ->
         {:noreply, assign(socket, :topic_form, topic_form(params, errors))}
@@ -205,8 +206,20 @@ defmodule EventbusWeb.AppLive do
 
   defp assign_origin_form(socket, changeset), do: assign(socket, :origin_form, to_form(changeset))
 
-  # The topic form only takes the part of the name after "<slug>.", so it's a
-  # plain params form with errors computed here.
+  # The current level of the topic tree: its groups as a plain list (there
+  # are few), its topics as a stream (there can be many).
+  defp load_topic_level(socket) do
+    %{groups: groups, topics: topics} =
+      Topics.list_app_topic_level(socket.assigns.app, socket.assigns.topic_group)
+
+    socket
+    |> assign(:topic_groups, groups)
+    |> assign(:topics_count, length(topics))
+    |> stream(:topics, topics, reset: true)
+  end
+
+  # The topic form only takes the part of the name after "<slug>.<group>.",
+  # so it's a plain params form with errors computed here.
   defp topic_form(params, errors \\ []), do: to_form(params, as: "topic", errors: errors)
 
   defp topic_errors(socket, params) do
@@ -214,11 +227,32 @@ defmodule EventbusWeb.AppLive do
 
     case String.trim(params["name"] || "") do
       "" -> [name: {"can't be blank", []}]
-      name -> Topics.change_topic(app, %{name: full_name(app.slug, name)}).errors
+      name -> Topics.change_topic(app, %{name: topic_name(socket, name)}).errors
     end
   end
 
-  defp full_name(slug, name), do: "#{slug}.#{String.trim(name || "")}"
+  defp topic_name(socket, name) do
+    %{app: app, topic_group: group} = socket.assigns
+    topic_prefix(app, group) <> String.trim(name || "")
+  end
+
+  defp topic_prefix(app, ""), do: "#{app.slug}."
+  defp topic_prefix(app, group), do: "#{app.slug}.#{group}."
+
+  # One breadcrumb per segment of `group`: {segment, group path up to it}.
+  defp group_crumbs(group) do
+    group
+    |> String.split(".", trim: true)
+    |> Enum.scan({nil, ""}, fn segment, {_, path} ->
+      {segment, if(path == "", do: segment, else: "#{path}.#{segment}")}
+    end)
+  end
+
+  defp group_path(slug, ""), do: ~p"/apps/#{slug}/topics"
+  defp group_path(slug, group), do: ~p"/apps/#{slug}/topics?#{[group: group]}"
+
+  defp child_group("", segment), do: segment
+  defp child_group(group, segment), do: "#{group}.#{segment}"
 
   # Build the quick-start URL from the address the browser is on, not the
   # endpoint config: PHX_HOST may be a LAN IP while the page is being viewed
@@ -259,6 +293,8 @@ defmodule EventbusWeb.AppLive do
           app={@app}
           superadmin?={@superadmin?}
           topic_form={@topic_form}
+          topic_group={@topic_group}
+          topic_groups={@topic_groups}
           topics_count={@topics_count}
           topics={@streams.topics}
         />
@@ -293,6 +329,8 @@ defmodule EventbusWeb.AppLive do
   attr :app, :any, required: true
   attr :superadmin?, :boolean, required: true
   attr :topic_form, :any, required: true
+  attr :topic_group, :string, required: true
+  attr :topic_groups, :list, required: true
   attr :topics_count, :integer, required: true
   attr :topics, :any, required: true
 
@@ -317,7 +355,7 @@ defmodule EventbusWeb.AppLive do
         >
           <div class="flex min-w-0 flex-1 items-start">
             <span class="mt-1 flex h-10 items-center rounded-l-lg border border-r-0 border-base-content/20 bg-base-content/5 px-3 font-mono text-sm text-base-content/60">
-              {@app.slug}.
+              {topic_prefix(@app, @topic_group)}
             </span>
             <div class="min-w-0 flex-1 [&_input]:rounded-l-none">
               <.input
@@ -391,20 +429,73 @@ defmodule EventbusWeb.AppLive do
       </.card>
 
       <div>
-        <div class="mb-3 flex items-baseline justify-between">
-          <h2 class="text-sm font-semibold uppercase tracking-wider text-base-content/50">
-            Topics
-          </h2>
-          <span id="topics-count" class="text-sm tabular-nums text-base-content/50">
+        <div class="mb-3 flex items-baseline justify-between gap-4">
+          <nav
+            id="topic-crumbs"
+            aria-label="Topic groups"
+            class="flex min-w-0 flex-wrap items-center gap-1 text-sm font-semibold uppercase tracking-wider text-base-content/50"
+          >
+            <.link
+              patch={group_path(@app.slug, "")}
+              class={[
+                "transition-colors hover:text-primary",
+                @topic_group == "" && "text-base-content/80"
+              ]}
+            >
+              Topics
+            </.link>
+            <%= for {segment, path} <- group_crumbs(@topic_group) do %>
+              <.icon name="hero-chevron-right-mini" class="size-4 shrink-0 text-base-content/30" />
+              <.link
+                patch={group_path(@app.slug, path)}
+                class={[
+                  "truncate font-mono normal-case tracking-normal transition-colors hover:text-primary",
+                  path == @topic_group && "text-base-content/80"
+                ]}
+              >
+                {segment}
+              </.link>
+            <% end %>
+          </nav>
+          <span id="topics-count" class="shrink-0 text-sm tabular-nums text-base-content/50">
+            <span :if={@topic_groups != []}>
+              {length(@topic_groups)} {if length(@topic_groups) == 1, do: "group", else: "groups"} ·
+            </span>
             {@topics_count} {if @topics_count == 1, do: "topic", else: "topics"}
           </span>
         </div>
+        <ul :if={@topic_groups != []} id="topic-groups" class="mb-3 grid gap-3 sm:grid-cols-2">
+          <li :for={{segment, count} <- @topic_groups} id={"topic-group-#{segment}"}>
+            <.link
+              patch={group_path(@app.slug, child_group(@topic_group, segment))}
+              class="group flex h-full items-center gap-4 rounded-2xl border border-base-content/10 bg-base-200/40 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-base-100 hover:shadow-md hover:shadow-primary/5"
+            >
+              <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-base-content/5 text-base-content/60 transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+                <.icon name="hero-folder" class="size-5" />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate font-mono text-sm font-medium">
+                  <span class="text-base-content/40">{topic_prefix(@app, @topic_group)}</span>{segment}
+                </span>
+                <span class="mt-0.5 block text-xs text-base-content/50">
+                  {count} {if count == 1, do: "topic", else: "topics"}
+                </span>
+              </span>
+              <.icon
+                name="hero-chevron-right"
+                class="size-4 shrink-0 text-base-content/30 transition-all group-hover:translate-x-0.5 group-hover:text-primary"
+              />
+            </.link>
+          </li>
+        </ul>
         <ul id="topics" phx-update="stream" class="grid gap-3 sm:grid-cols-2">
           <li
+            :if={@topic_groups == []}
             id="topics-empty"
             class="hidden only:block rounded-2xl border border-dashed border-base-content/10 px-4 py-5 text-sm text-base-content/50 sm:col-span-2"
           >
-            No topics yet. Publish to <code class="font-mono">{@app.slug}.&lt;name&gt;</code>
+            No topics yet. Publish to
+            <code class="font-mono">{topic_prefix(@app, @topic_group)}&lt;name&gt;</code>
             with this app's credentials to create one.
           </li>
           <li :for={{id, topic} <- @topics} id={id}>
@@ -416,7 +507,13 @@ defmodule EventbusWeb.AppLive do
                 <.icon name="hero-signal" class="size-5" />
               </span>
               <span class="min-w-0 flex-1">
-                <span class="block truncate font-mono text-sm font-medium">{topic.name}</span>
+                <span class="block truncate font-mono text-sm font-medium">
+                  <span class="text-base-content/40">{topic_prefix(@app, @topic_group)}</span>{String.replace_prefix(
+                    topic.name,
+                    topic_prefix(@app, @topic_group),
+                    ""
+                  )}
+                </span>
                 <span class="mt-0.5 block text-xs text-base-content/50">
                   Created {format_date(topic.inserted_at)}
                 </span>

@@ -53,6 +53,26 @@ defmodule EventbusWeb.AppLiveTest do
       assert Topics.get_topic_by_name("chat.random")
     end
 
+    test "groups topics by name segment and drills into a group", %{conn: conn} do
+      for name <- ~w(chat.lobby chat.board.a chat.board.b), do: topic_fixture(name: name)
+      {:ok, live, _html} = live(conn, ~p"/apps/chat/topics")
+
+      assert has_element?(live, "#topic-group-board", "2 topics")
+      assert has_element?(live, "#topics", "chat.lobby")
+      refute has_element?(live, "#topics", "chat.board.a")
+
+      live |> element("#topic-group-board a") |> render_click()
+      assert_patched(live, "/apps/chat/topics?group=board")
+
+      assert has_element?(live, "#topic-crumbs", "board")
+      assert has_element?(live, "#topics", "chat.board.a")
+      refute has_element?(live, "#topics", "chat.lobby")
+
+      live |> form("#topic-form", topic: %{name: "c"}) |> render_submit()
+      assert Topics.get_topic_by_name("chat.board.c")
+      assert has_element?(live, "#topics-count", "3 topics")
+    end
+
     test "lists and creates chat rooms", %{conn: conn, app: app} do
       room_fixture(app, %{name: "eng"})
       room_fixture(app_fixture(), %{name: "elsewhere"})

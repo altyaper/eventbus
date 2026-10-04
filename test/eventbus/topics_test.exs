@@ -62,6 +62,27 @@ defmodule Eventbus.TopicsTest do
     refute Topics.get_topic_by_name(topic.name)
   end
 
+  describe "list_app_topic_level/2" do
+    test "groups topics by their next name segment" do
+      app = app_fixture(slug: "chat")
+
+      for name <- ~w(chat.lobby chat.board chat.board.a chat.board.b chat.board.x.y chat.dm.z),
+          do: topic_fixture(name: name)
+
+      topic_fixture(name: "other.board.a")
+
+      top = Topics.list_app_topic_level(app, "")
+      assert top.groups == [{"board", 3}, {"dm", 1}]
+      assert top.topics |> Enum.map(& &1.name) |> Enum.sort() == ~w(chat.board chat.lobby)
+
+      board = Topics.list_app_topic_level(app, "board")
+      assert board.groups == [{"x", 1}]
+      assert board.topics |> Enum.map(& &1.name) |> Enum.sort() == ~w(chat.board.a chat.board.b)
+
+      assert Topics.list_app_topic_level(app, "nope") == %{groups: [], topics: []}
+    end
+  end
+
   describe "valid_name?/1" do
     test "accepts lowercase alphanumeric names with '.', '-', '_'" do
       assert Topics.valid_name?("changologs.logs")

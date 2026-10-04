@@ -75,6 +75,29 @@ defmodule EventbusWeb.TopicShowLive do
     {:noreply, assign(socket, :events, events)}
   end
 
+  # The topic's group on the topics page: "board" for "<slug>.board.x".
+  defp parent_group(slug, name) do
+    name
+    |> String.replace_prefix(slug <> ".", "")
+    |> String.split(".")
+    |> Enum.drop(-1)
+    |> Enum.join(".")
+  end
+
+  defp parent_path(slug, name) do
+    case parent_group(slug, name) do
+      "" -> ~p"/apps/#{slug}/topics"
+      group -> ~p"/apps/#{slug}/topics?#{[group: group]}"
+    end
+  end
+
+  defp parent_name(slug, name) do
+    case parent_group(slug, name) do
+      "" -> slug
+      group -> "#{slug}.#{group}"
+    end
+  end
+
   defp assign_payload_form(socket, params, opts \\ []) do
     assign(socket, :form, to_form(params, Keyword.put(opts, :as, "test")))
   end
@@ -87,7 +110,9 @@ defmodule EventbusWeb.TopicShowLive do
         <.header>
           <span class="font-mono">{@name}</span>
           <:subtitle>
-            <.link navigate={~p"/apps/#{@app.slug}/topics"}>&larr; All {@app.slug} topics</.link>
+            <.link id="topic-back" navigate={parent_path(@app.slug, @name)}>
+              &larr; All {parent_name(@app.slug, @name)} topics
+            </.link>
           </:subtitle>
           <:actions>
             <.button phx-click="toggle_listening" variant="primary">
