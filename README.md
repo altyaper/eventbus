@@ -22,6 +22,16 @@ It asks for the server's API key as proof you own the install. Unless you set
 `EVENTBUS_API_KEY` yourself, a key is generated on first boot, stored in the database and
 printed in the logs until setup is done (`docker compose logs app`). That's its only use.
 
+**Accounts:** after setup, anyone can sign up at `/signup` with an email and password. Each user
+only sees their own apps. A new account starts with a `sandbox-…` app; until the email is
+confirmed it can't create other apps and the sandbox is limited to 5 topics. Confirmation and
+password reset emails go through [Resend](https://resend.com) when `RESEND_API_KEY` and
+`MAIL_FROM` are set; otherwise they're only logged, links included.
+
+**Upgrading from username logins:** set `EVENTBUS_ADMIN_EMAIL` to the superadmin's email before
+upgrading. The migration gives them that email, marks it confirmed and makes them the owner of
+every existing app. Then log in with the email instead of the username.
+
 **Publishing:** create an application under **My Apps** (e.g. `changologs`). It owns every topic
 named `changologs.*` and gets a client ID and secret (the secret is shown once). Publish with
 HTTP Basic auth:

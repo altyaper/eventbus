@@ -1,0 +1,100 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <.legal_page id="privacy" title="Privacy Policy">
+    <section>
+      <p>
+        This policy explains what eventbus stores about you, why, and what you can do about it.
+        eventbus is a real-time event bus: your applications publish events over HTTP and your
+        clients receive them over WebSockets.
+      </p>
+    </section>
+
+    <section>
+      <h2>What we store</h2>
+      <ul>
+        <li>
+          <strong>Your account:</strong>
+          your email address, a hash of your password (never the password itself), whether and
+          when you confirmed your email, and when you accepted these policies.
+        </li>
+        <li>
+          <strong>What you create:</strong>
+          application names and credentials (secrets are stored only as hashes), topic names,
+          allowed origins, chat rooms, chat users and chat messages.
+        </li>
+        <li>
+          <strong>Login sessions:</strong>
+          a random token per logged-in browser, so you can stay logged in and log out.
+        </li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>What we don't store</h2>
+      <p>
+        Events published to topics are delivered live and are not written to the database. If
+        nobody is listening when an event is published, it is gone. Chat messages are the
+        exception, because chat needs history.
+      </p>
+    </section>
+
+    <section>
+      <h2>Cookies</h2>
+      <p>
+        We use one cookie: the session cookie that keeps you logged in. There are no
+        advertising or analytics cookies, and no third-party trackers.
+      </p>
+    </section>
+
+    <section>
+      <h2>Email</h2>
+      <p>
+        We email you only about your account: confirming your address and resetting your
+        password. Those emails are sent through <a
+          href="https://resend.com"
+          target="_blank"
+          rel="noopener"
+        >Resend</a>, which receives your
+        email address and the message to deliver it. We don't send marketing email.
+      </p>
+    </section>
+
+    <section>
+      <h2>Who we share data with</h2>
+      <p>
+        Nobody, apart from the email provider above and the infrastructure that hosts the
+        service. We don't sell or rent your data.
+      </p>
+    </section>
+
+    <section>
+      <h2>How long we keep it</h2>
+      <p>
+        Your account and everything you created are kept until you delete them or ask us to
+        delete your account. Deleting an application deletes its topics, origins, chat rooms
+        and messages. Expired login sessions and emailed links stop working and are removed over
+        time.
+      </p>
+    </section>
+
+    <section>
+      <h2>Your rights</h2>
+      <p>
+        You can ask for a copy of your data, a correction, or the deletion of your account and
+        everything in it by contacting the operator of this service from the email address on
+        your account.
+      </p>
+    </section>
+
+    <section>
+      <h2>Changes</h2>
+      <p>
+        If this policy changes, the date at the top changes too. For significant changes we'll
+        email you before they take effect.
+      </p>
+    </section>
+
+    <p class="text-sm text-base-content/50">
+      See also the <.link href={~p"/terms"}>Terms of Service</.link>.
+    </p>
+  </.legal_page>
+</Layouts.app>

@@ -2,19 +2,25 @@ defmodule Eventbus.AccountsTest do
   use Eventbus.DataCase, async: true
 
   import Eventbus.AccountsFixtures
+  import Swoosh.TestAssertions
 
-  alias Eventbus.Accounts
-  alias Eventbus.Accounts.{User, UserToken}
+  alias Eventbus.{Accounts, Applications}
+  alias Eventbus.Accounts.{Scope, User, UserToken}
 
   describe "create_superadmin/1" do
     test "creates the first user as superadmin with a hashed password" do
       refute Accounts.any_users?()
 
       assert {:ok, %User{} = user} =
-               Accounts.create_superadmin(%{username: "  Admin ", password: valid_password()})
+               Accounts.create_superadmin(%{
+                 email: "  admin@example.com ",
+                 password: valid_password()
+               })
 
-      assert user.username == "admin"
+      assert user.email == "admin@example.com"
       assert user.role == "superadmin"
+      assert user.confirmed_at
+      assert user.accepted_terms_at
       assert is_binary(user.hashed_password)
       assert is_nil(user.password)
       assert Accounts.any_users?()
@@ -27,37 +33,48 @@ defmodule Eventbus.AccountsTest do
                Accounts.create_superadmin(valid_user_attributes())
     end
 
-    test "validates username and password" do
+    test "validates email and password" do
       assert {:error, changeset} =
                Accounts.create_superadmin(%{
-                 username: "x!",
+                 email: "not an email",
                  password: "short",
                  password_confirmation: "different"
                })
 
       errors = errors_on(changeset)
-      assert "should be at least 3 character(s)" in errors.username
-      assert "must be lowercase letters, digits, '.', '-', '_'" in errors.username
+      assert "must have the @ sign and no spaces" in errors.email
       assert "should be at least 12 character(s)" in errors.password
       assert "does not match password" in errors.password_confirmation
     end
   end
 
-  describe "get_user_by_username_and_password/2" do
-    test "returns the user for valid credentials, case-insensitive username" do
-      user = user_fixture(username: "jorge")
+  describe "get_user_by_email_and_password/2" do
+    test "returns the user for valid credentials, case-insensitive email" do
+      user = user_fixture(email: "jorge@example.com")
 
       assert %User{id: id} =
-               Accounts.get_user_by_username_and_password("JORGE", valid_password())
+               Accounts.get_user_by_email_and_password(" JORGE@example.com", valid_password())
 
       assert id == user.id
     end
 
     test "returns nil for a wrong password or unknown user" do
       user = user_fixture()
-      refute Accounts.get_user_by_username_and_password(user.username, "wrong password!")
-      refute Accounts.get_user_by_username_and_password("nobody", valid_password())
+      refute Accounts.get_user_by_email_and_password(user.email, "wrong password!")
+      refute Accounts.get_user_by_email_and_password("nobody@example.com", valid_password())
     end
+  end
+
+  test "emails are unique regardless of case" do
+    user_fixture(email: "taken@example.com")
+
+    assert {:error, changeset} =
+             %User{}
+             |> User.registration_changeset(valid_user_attributes(email: "TAKEN@example.com"))
+             |> User.role_changeset("member")
+             |> Repo.insert()
+
+    assert "has already been taken" in errors_on(changeset).email
   end
 
   describe "session tokens" do
@@ -79,6 +96,168 @@ defmodule Eventbus.AccountsTest do
       expired = DateTime.add(DateTime.utc_now(), -UserToken.session_validity_in_days() - 1, :day)
       Repo.update_all(UserToken, set: [inserted_at: expired])
       refute Accounts.get_user_by_session_token(token)
+    end
+  end
+
+  describe "register_user/1" do
+    defp signup_attrs(overrides \\ %{}) do
+      Enum.into(overrides, %{
+        email: unique_user_email(),
+        password: valid_password(),
+        password_confirmation: valid_password(),
+        terms: "true"
+      })
+    end
+
+    test "creates an unconfirmed member with a sandbox app" do
+      assert {:ok, user} = Accounts.register_user(signup_attrs())
+
+      assert user.role == "member"
+      assert user.confirmed_at == nil
+      assert user.accepted_terms_at
+
+      assert [%{slug: "sandbox-" <> _}] =
+               Applications.list_apps_with_topic_counts(Scope.for_user(user))
+    end
+
+    test "requires accepting the terms and creates nothing otherwise" do
+      assert {:error, changeset} = Accounts.register_user(signup_attrs(terms: "false"))
+      assert "must be accepted to sign up" in errors_on(changeset).terms
+      refute Accounts.any_users?()
+    end
+
+    test "rejects a taken email" do
+      user_fixture(email: "taken@example.com")
+
+      assert {:error, changeset} =
+               Accounts.register_user(signup_attrs(email: "Taken@example.com"))
+
+      assert "has already been taken" in errors_on(changeset).email
+    end
+  end
+
+  describe "deliver_user_confirmation_instructions/2" do
+    setup do
+      %{user: user_fixture(confirmed: false)}
+    end
+
+    test "emails a link with a token that only exists hashed", %{user: user} do
+      assert {:ok, email} =
+               Accounts.deliver_user_confirmation_instructions(user, capture_token_url())
+
+      assert email == user.email
+      assert_received {:token, token}
+
+      assert_email_sent(fn sent ->
+        assert sent.to == [{"", user.email}]
+        assert sent.subject == "Confirm your eventbus email"
+        assert sent.text_body =~ "https://eventbus.test/#{token}"
+      end)
+
+      assert %UserToken{token: stored, sent_to: sent_to} =
+               Repo.get_by(UserToken, context: "confirm")
+
+      assert sent_to == user.email
+      refute stored == token
+    end
+
+    test "waits a minute between links", %{user: user} do
+      assert {:ok, _} = Accounts.deliver_user_confirmation_instructions(user, & &1)
+      assert {:error, :cooldown} = Accounts.deliver_user_confirmation_instructions(user, & &1)
+    end
+
+    test "skips confirmed users" do
+      assert {:error, :already_confirmed} =
+               Accounts.deliver_user_confirmation_instructions(user_fixture(), & &1)
+    end
+  end
+
+  describe "confirm_user/1" do
+    setup do
+      user = user_fixture(confirmed: false)
+      {:ok, _} = Accounts.deliver_user_confirmation_instructions(user, capture_token_url())
+      assert_received {:token, token}
+      %{user: user, token: token}
+    end
+
+    test "confirms once", %{user: user, token: token} do
+      assert {:ok, confirmed} = Accounts.confirm_user(token)
+      assert confirmed.id == user.id
+      assert confirmed.confirmed_at
+      refute Repo.get_by(UserToken, user_id: user.id, context: "confirm")
+
+      assert :error = Accounts.confirm_user(token)
+    end
+
+    test "rejects expired tokens", %{token: token} do
+      Repo.update_all(UserToken, set: [inserted_at: DateTime.add(DateTime.utc_now(), -8, :day)])
+      assert :error = Accounts.confirm_user(token)
+    end
+
+    test "rejects a token sent to a previous email", %{user: user, token: token} do
+      Repo.update_all(from(u in User, where: u.id == ^user.id), set: [email: "new@example.com"])
+      assert :error = Accounts.confirm_user(token)
+    end
+
+    test "rejects tampered and malformed tokens", %{token: token} do
+      assert :error = Accounts.confirm_user(token <> "x")
+      assert :error = Accounts.confirm_user("not base64!")
+    end
+  end
+
+  describe "password reset" do
+    setup do
+      %{user: user_fixture(confirmed: false)}
+    end
+
+    defp request_reset(user) do
+      :ok = Accounts.deliver_user_reset_password_instructions(user.email, capture_token_url())
+      assert_received {:token, token}
+      token
+    end
+
+    test "emails a link only to existing accounts, at most once a minute", %{user: user} do
+      assert :ok = Accounts.deliver_user_reset_password_instructions("nobody@example.com", & &1)
+      refute_email_sent()
+
+      request_reset(user)
+      assert_email_sent(subject: "Reset your eventbus password")
+
+      assert :ok = Accounts.deliver_user_reset_password_instructions(user.email, & &1)
+      refute_email_sent()
+    end
+
+    test "tokens are valid for a day", %{user: user} do
+      token = request_reset(user)
+      assert Accounts.get_user_by_reset_password_token(token).id == user.id
+
+      Repo.update_all(UserToken, set: [inserted_at: DateTime.add(DateTime.utc_now(), -25, :hour)])
+      refute Accounts.get_user_by_reset_password_token(token)
+      refute Accounts.get_user_by_reset_password_token("garbage!")
+    end
+
+    test "resetting ends every session, voids the link and confirms the email", %{user: user} do
+      session = Accounts.generate_user_session_token(user)
+      token = request_reset(user)
+
+      assert {:ok, updated, [^session]} =
+               Accounts.reset_user_password(user, %{
+                 password: "a brand new password",
+                 password_confirmation: "a brand new password"
+               })
+
+      assert updated.confirmed_at
+      refute Accounts.get_user_by_session_token(session)
+      refute Accounts.get_user_by_reset_password_token(token)
+      assert Accounts.get_user_by_email_and_password(user.email, "a brand new password")
+    end
+
+    test "validates the new password", %{user: user} do
+      assert {:error, changeset} =
+               Accounts.reset_user_password(user, %{password: "short", password_confirmation: "x"})
+
+      assert "should be at least 12 character(s)" in errors_on(changeset).password
+      assert Accounts.get_user_by_email_and_password(user.email, valid_password())
     end
   end
 end

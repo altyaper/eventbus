@@ -202,8 +202,8 @@ defmodule EventbusWeb.DocsLive do
             <ol class="list-decimal space-y-2 pl-5 marker:font-semibold marker:text-primary">
               <li>
                 Under <.link navigate={~p"/apps"} class="font-medium text-primary hover:underline">My Apps</.link>,
-                create an application. Its name becomes the prefix of its topics. Only the
-                superadmin can create one.
+                create an application. Its name becomes the prefix of its topics. Confirm
+                your email first; until then you have a sandbox app with up to 5 topics.
               </li>
               <li>
                 Copy the <strong>client ID</strong>

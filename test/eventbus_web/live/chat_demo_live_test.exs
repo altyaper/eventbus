@@ -5,13 +5,12 @@ defmodule EventbusWeb.ChatDemoLiveTest do
   import Eventbus.ApplicationsFixtures
 
   alias Eventbus.Chat.{Messages, Rooms, Tokens, Users}
-  alias Eventbus.Accounts.User
 
   setup do
     %{app: app_fixture(slug: "acme")}
   end
 
-  describe "as the superadmin" do
+  describe "as the owner" do
     setup :register_and_log_in_user
 
     test "acting as a user mounts the SDK hook", %{conn: conn, app: app} do
@@ -72,15 +71,10 @@ defmodule EventbusWeb.ChatDemoLiveTest do
     end
   end
 
-  test "other users are sent back to the chat section", %{conn: conn} do
-    member =
-      Eventbus.Repo.insert!(%User{
-        username: "member",
-        hashed_password: Bcrypt.hash_pwd_salt("whatever password"),
-        role: "member"
-      })
+  test "other users are sent back to My Apps", %{conn: conn} do
+    other = Eventbus.AccountsFixtures.user_fixture()
 
-    assert {:error, {:live_redirect, %{to: "/apps/acme/chat"}}} =
-             conn |> log_in_user(member) |> live(~p"/apps/acme/chat/demo")
+    assert {:error, {:live_redirect, %{to: "/apps"}}} =
+             conn |> log_in_user(other) |> live(~p"/apps/acme/chat/demo")
   end
 end

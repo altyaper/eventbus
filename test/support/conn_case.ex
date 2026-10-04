@@ -37,12 +37,26 @@ defmodule EventbusWeb.ConnCase do
   end
 
   @doc """
-  Setup helper that creates a user and logs them in.
+  Setup helper that logs in the test's default user, a confirmed member who
+  owns every app fixture created without an explicit owner.
 
       setup :register_and_log_in_user
   """
   def register_and_log_in_user(%{conn: conn}) do
-    user = Eventbus.AccountsFixtures.user_fixture()
+    user = Eventbus.AccountsFixtures.default_user()
+    %{conn: log_in_user(conn, user), user: user}
+  end
+
+  @doc """
+  Like `register_and_log_in_user/1`, but the user hasn't confirmed their
+  email yet.
+  """
+  def register_and_log_in_unconfirmed_user(%{conn: conn}) do
+    user =
+      Eventbus.AccountsFixtures.put_default_user(
+        Eventbus.AccountsFixtures.user_fixture(confirmed: false)
+      )
+
     %{conn: log_in_user(conn, user), user: user}
   end
 

@@ -9,7 +9,6 @@ defmodule EventbusWeb.AppLiveTest do
 
   alias Eventbus.{Applications, Origins, Topics}
   alias Eventbus.Chat.Rooms
-  alias Eventbus.Accounts.User
 
   setup do
     on_exit(fn -> :persistent_term.erase({Origins, :patterns}) end)
@@ -21,7 +20,7 @@ defmodule EventbusWeb.AppLiveTest do
     assert {:error, {:live_redirect, %{to: "/apps"}}} = live(conn, ~p"/apps/nope/topics")
   end
 
-  describe "as the superadmin" do
+  describe "as the owner" do
     setup :register_and_log_in_user
 
     test "/apps/:slug opens the topics section", %{conn: conn} do
@@ -200,57 +199,38 @@ defmodule EventbusWeb.AppLiveTest do
 
   describe "as another user" do
     setup %{conn: conn} do
-      member =
-        Eventbus.Repo.insert!(%User{
-          username: "member",
-          hashed_password: Bcrypt.hash_pwd_salt("whatever password"),
-          role: "member"
-        })
-
-      %{conn: log_in_user(conn, member)}
+      %{conn: log_in_user(conn, Eventbus.AccountsFixtures.user_fixture())}
     end
 
-    test "only sees topics, without the new-topic form", %{conn: conn} do
-      topic_fixture(name: "chat.lobby")
-      {:ok, live, _html} = live(conn, ~p"/apps/chat/topics")
-
-      assert has_element?(live, "#topics", "chat.lobby")
-      assert has_element?(live, "#section-topics")
-      refute has_element?(live, "#section-credentials")
-      refute has_element?(live, "#section-origins")
-      refute has_element?(live, "#section-settings")
-      refute has_element?(live, "#topic-form")
-      assert has_element?(live, "#section-chat")
-    end
-
-    test "sees chat rooms, without the new-room form", %{conn: conn, app: app} do
-      room_fixture(app, %{name: "eng"})
-      {:ok, live, _html} = live(conn, ~p"/apps/chat/chat")
-
-      assert has_element?(live, "#rooms", "eng")
-      refute has_element?(live, "#room-form")
-
-      render_hook(live, "create_room", %{"room" => %{"name" => "x", "type" => "group"}})
-      assert length(Rooms.list_app_rooms(app)) == 1
-    end
-
-    test "restricted sections send them back to topics", %{conn: conn} do
-      for section <- ~w(credentials origins settings) do
-        assert {:error, {:live_redirect, %{to: "/apps/chat/topics", flash: flash}}} =
+    test "every section sends them back to My Apps", %{conn: conn} do
+      for section <- ~w(topics chat credentials origins settings) do
+        assert {:error, {:live_redirect, %{to: "/apps", flash: flash}}} =
                  live(conn, "/apps/chat/#{section}")
 
-        assert flash["error"] =~ "Only the superadmin"
+        assert flash["error"] =~ "There's no application chat"
       end
     end
+  end
 
-    test "can't trigger management events directly", %{conn: conn, app: app} do
-      {:ok, live, _html} = live(conn, ~p"/apps/chat/topics")
+  describe "when the owner is unconfirmed" do
+    setup %{conn: conn} do
+      owner = Eventbus.AccountsFixtures.user_fixture(confirmed: false)
+      app = app_fixture(slug: "sandbox-abc", owner: owner)
+      %{conn: log_in_user(conn, owner), app: app}
+    end
 
-      render_hook(live, "delete_app", %{})
-      render_hook(live, "add_origin", %{"allowed_origin" => %{"origin" => "https://x.com"}})
+    test "topics are capped and the form says so", %{conn: conn, app: app} do
+      for i <- 1..4, do: topic_fixture(app: app, name: "sandbox-abc.t#{i}")
+      {:ok, live, _html} = live(conn, ~p"/apps/sandbox-abc/topics")
 
-      assert Applications.get_app!(app.id)
-      assert Origins.list_allowed_origins(app) == []
+      assert has_element?(live, "#topic-usage", "4/5")
+
+      live |> form("#topic-form", topic: %{name: "fifth"}) |> render_submit()
+      assert has_element?(live, "#topic-usage", "5/5")
+
+      live |> form("#topic-form", topic: %{name: "sixth"}) |> render_submit()
+      assert has_element?(live, "#topic-form", "confirm your email")
+      refute Topics.get_topic_by_name("sandbox-abc.sixth")
     end
   end
 end

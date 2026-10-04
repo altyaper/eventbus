@@ -5,7 +5,7 @@ defmodule EventbusWeb.LoginLiveTest do
   import Eventbus.AccountsFixtures
 
   setup do
-    %{user: user_fixture(username: "jorge")}
+    %{user: user_fixture(email: "jorge@example.com")}
   end
 
   test "protected pages redirect to /login when logged out", %{conn: conn} do
@@ -20,20 +20,21 @@ defmodule EventbusWeb.LoginLiveTest do
 
   test "logs in with valid credentials", %{conn: conn} do
     conn =
-      post(conn, ~p"/login", user: %{username: "jorge", password: valid_password()})
+      post(conn, ~p"/login", user: %{email: "jorge@example.com", password: valid_password()})
 
     assert redirected_to(conn) == ~p"/apps"
     assert get_session(conn, :user_token)
 
     {:ok, live, _html} = live(conn, ~p"/apps")
-    assert has_element?(live, "#user-menu-button", "jorge")
+    assert has_element?(live, "#user-menu-button", "jorge@example.com")
   end
 
   test "rejects invalid credentials with a generic error", %{conn: conn} do
-    conn = post(conn, ~p"/login", user: %{username: "jorge", password: "wrong password!"})
+    conn =
+      post(conn, ~p"/login", user: %{email: "jorge@example.com", password: "wrong password!"})
 
     assert redirected_to(conn) == ~p"/login"
-    assert Phoenix.Flash.get(conn.assigns.flash, :error) == "Invalid username or password."
+    assert Phoenix.Flash.get(conn.assigns.flash, :error) == "Invalid email or password."
     refute get_session(conn, :user_token)
   end
 

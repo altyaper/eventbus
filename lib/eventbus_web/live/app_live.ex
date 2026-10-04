@@ -2,8 +2,7 @@ defmodule EventbusWeb.AppLive do
   @moduledoc """
   One application's pages, one `live_action` per section: topics, chat,
   credentials, origins and settings. Sections are patched, so the app is
-  loaded once. Everyone sees topics and chat; the other sections and every
-  change are superadmin-only.
+  loaded once. Only the app's owner can open them.
   """
 
   use EventbusWeb, :live_view
@@ -12,12 +11,11 @@ defmodule EventbusWeb.AppLive do
 
   alias Eventbus.{Applications, Origins, Topics, TopicTokens}
   alias Eventbus.Chat.{Broadcast, Rooms, Users}
-  alias Eventbus.Accounts.Scope
   alias Eventbus.Origins.AllowedOrigin
 
   @impl true
   def mount(%{"slug" => slug}, _session, socket) do
-    case Applications.get_app_by_slug(slug) do
+    case Applications.get_owned_app(socket.assigns.current_scope, slug) do
       nil ->
         {:ok,
          socket
@@ -29,7 +27,6 @@ defmodule EventbusWeb.AppLive do
          socket
          |> assign(:app, app)
          |> assign(:page_title, app.slug)
-         |> assign(:superadmin?, Scope.superadmin?(socket.assigns.current_scope))
          |> assign(:secret, nil)
          |> stream_configure(:topics, dom_id: &"topic-#{&1.id}")
          |> stream_configure(:origins, dom_id: &"origin-#{&1.id}")
@@ -49,12 +46,6 @@ defmodule EventbusWeb.AppLive do
       action == :index ->
         {:noreply,
          push_patch(socket, to: section_path(socket.assigns.app.slug, :topics), replace: true)}
-
-      action in superadmin_sections() and not socket.assigns.superadmin? ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Only the superadmin can open that page.")
-         |> push_patch(to: section_path(socket.assigns.app.slug, :topics), replace: true)}
 
       true ->
         {:noreply, load_section(socket, action, uri)}
@@ -99,10 +90,6 @@ defmodule EventbusWeb.AppLive do
   defp load_section(socket, :settings, _uri), do: socket
 
   @impl true
-  def handle_event(_event, _params, %{assigns: %{superadmin?: false}} = socket) do
-    {:noreply, put_flash(socket, :error, "Only the superadmin can do that.")}
-  end
-
   def handle_event("validate_topic", %{"topic" => params}, socket) do
     {:noreply, assign(socket, :topic_form, topic_form(params, topic_errors(socket, params)))}
   end
@@ -120,6 +107,12 @@ defmodule EventbusWeb.AppLive do
     else
       errors when is_list(errors) ->
         {:noreply, assign(socket, :topic_form, topic_form(params, errors))}
+
+      {:error, :topic_limit} ->
+        message =
+          "confirm your email to create more than #{Topics.unconfirmed_topic_limit()} topics"
+
+        {:noreply, assign(socket, :topic_form, topic_form(params, name: {message, []}))}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :topic_form, topic_form(params, changeset.errors))}
@@ -227,7 +220,13 @@ defmodule EventbusWeb.AppLive do
     socket
     |> assign(:topic_groups, groups)
     |> assign(:topics_count, length(topics))
+    |> assign(:topic_usage, topic_usage(socket.assigns.app))
     |> stream(:topics, topics, reset: true)
+  end
+
+  # `{used, limit}` while the owner is unconfirmed and topics are capped.
+  defp topic_usage(app) do
+    if limit = Topics.topic_limit(app), do: {Topics.count_app_topics(app), limit}
   end
 
   # The topic form only takes the part of the name after "<slug>.<group>.",
@@ -298,22 +297,20 @@ defmodule EventbusWeb.AppLive do
         :if={@live_action != :index}
         app={@app}
         active={@live_action}
-        superadmin?={@superadmin?}
       >
         <.topics_section
           :if={@live_action == :topics}
           app={@app}
-          superadmin?={@superadmin?}
           topic_form={@topic_form}
           topic_group={@topic_group}
           topic_groups={@topic_groups}
           topics_count={@topics_count}
+          topic_usage={@topic_usage}
           topics={@streams.topics}
         />
         <.chat_section
           :if={@live_action == :chat}
           app={@app}
-          superadmin?={@superadmin?}
           room_form={@room_form}
           rooms_count={@rooms_count}
           rooms={@streams.rooms}
@@ -339,17 +336,17 @@ defmodule EventbusWeb.AppLive do
   end
 
   attr :app, :any, required: true
-  attr :superadmin?, :boolean, required: true
   attr :topic_form, :any, required: true
   attr :topic_group, :string, required: true
   attr :topic_groups, :list, required: true
   attr :topics_count, :integer, required: true
+  attr :topic_usage, :any, required: true
   attr :topics, :any, required: true
 
   defp topics_section(assigns) do
     ~H"""
     <div class="space-y-6">
-      <.card :if={@superadmin?} id="new-topic">
+      <.card id="new-topic">
         <h2 class="flex items-center gap-2 font-semibold">
           <.icon name="hero-plus-circle" class="size-5 text-primary" /> New topic
         </h2>
@@ -357,6 +354,17 @@ defmodule EventbusWeb.AppLive do
           Publishing to a new name creates it too. Lowercase letters, digits,
           <code class="font-mono">.</code> <code class="font-mono">-</code>
           <code class="font-mono">_</code>
+        </p>
+        <p
+          :if={@topic_usage}
+          id="topic-usage"
+          class="mt-3 flex items-center gap-2 rounded-lg bg-warning/10 px-3 py-2 text-xs text-base-content/70"
+        >
+          <.icon name="hero-envelope-micro" class="size-4 shrink-0 text-warning" />
+          <span>
+            <span class="font-semibold tabular-nums">{elem(@topic_usage, 0)}/{elem(@topic_usage, 1)}</span>
+            topics. Confirm your email to remove the limit.
+          </span>
         </p>
         <.form
           for={@topic_form}
@@ -548,7 +556,6 @@ defmodule EventbusWeb.AppLive do
   end
 
   attr :app, :any, required: true
-  attr :superadmin?, :boolean, required: true
   attr :room_form, :any, required: true
   attr :rooms_count, :integer, required: true
   attr :rooms, :any, required: true
@@ -556,7 +563,7 @@ defmodule EventbusWeb.AppLive do
   defp chat_section(assigns) do
     ~H"""
     <div class="space-y-6">
-      <.card :if={@superadmin?} id="new-room">
+      <.card id="new-room">
         <h2 class="flex items-center gap-2 font-semibold">
           <.icon name="hero-plus-circle" class="size-5 text-primary" /> New room
         </h2>
@@ -639,7 +646,6 @@ defmodule EventbusWeb.AppLive do
           </li>
         </ul>
         <.link
-          :if={@superadmin?}
           id="open-chat-demo"
           navigate={~p"/apps/#{@app.slug}/chat/demo"}
           class="mt-4 inline-flex items-center gap-1.5 rounded-full border border-primary/30 px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/5"

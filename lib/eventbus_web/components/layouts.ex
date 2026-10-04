@@ -77,14 +77,75 @@ defmodule EventbusWeb.Layouts do
         </div>
       </header>
 
+      <.confirm_banner
+        :if={@current_scope && !Eventbus.Accounts.Scope.confirmed?(@current_scope)}
+        email={@current_scope.user.email}
+      />
+
       <main class="px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
         <div class="mx-auto max-w-6xl">
           {render_slot(@inner_block)}
         </div>
       </main>
+
+      <footer class="border-t border-base-content/5 px-4 py-8 sm:px-6 lg:px-8">
+        <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 text-sm text-base-content/50 sm:flex-row">
+          <span>eventbus · real-time pub/sub</span>
+          <nav class="flex items-center gap-5">
+            <.link
+              id="footer-terms"
+              href={~p"/terms"}
+              class="transition-colors hover:text-base-content"
+            >
+              Terms
+            </.link>
+            <.link
+              id="footer-privacy"
+              href={~p"/privacy"}
+              class="transition-colors hover:text-base-content"
+            >
+              Privacy
+            </.link>
+          </nav>
+        </div>
+      </footer>
     </div>
 
     <.flash_group flash={@flash} />
+    """
+  end
+
+  @doc """
+  Asks an unconfirmed user to confirm their email, with a button to resend
+  the link.
+  """
+  attr :email, :string, required: true
+
+  def confirm_banner(assigns) do
+    ~H"""
+    <div
+      id="confirm-banner"
+      class="border-b border-warning/20 bg-warning/10 px-4 py-2.5 text-sm sm:px-6 lg:px-8"
+    >
+      <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <p class="flex items-center gap-2 text-base-content/80">
+          <.icon name="hero-envelope" class="size-5 shrink-0 text-warning" />
+          <span>
+            Confirm <strong class="font-semibold">{@email}</strong>
+            to create more apps and lift the 5-topic sandbox limit.
+          </span>
+        </p>
+        <.form for={%{}} as={:resend} id="resend-confirmation" action={~p"/confirm/resend"}>
+          <button
+            id="resend-confirmation-button"
+            type="submit"
+            class="inline-flex items-center gap-1.5 rounded-full border border-warning/40 px-3 py-1 text-xs font-semibold text-base-content/80 transition-colors hover:bg-warning/15"
+          >
+            <.icon name="hero-arrow-path-micro" class="size-4" /> Resend link
+          </button>
+        </.form>
+      </div>
+    </div>
     """
   end
 
@@ -114,7 +175,7 @@ defmodule EventbusWeb.Layouts do
   end
 
   @doc """
-  The logged-in user's menu: username, role and log out.
+  The logged-in user's menu: email, role and log out.
   """
   attr :current_scope, Eventbus.Accounts.Scope, required: true
 
@@ -128,9 +189,9 @@ defmodule EventbusWeb.Layouts do
         class="flex items-center gap-2 rounded-full border border-base-content/10 py-1 pr-3 pl-1 text-sm font-medium transition-colors hover:border-base-content/20 hover:bg-base-content/5"
       >
         <span class="grid size-7 place-items-center rounded-full bg-primary/15 text-xs font-semibold uppercase text-primary">
-          {String.first(@current_scope.user.username)}
+          {String.first(@current_scope.user.email)}
         </span>
-        <span class="hidden sm:inline">{@current_scope.user.username}</span>
+        <span class="hidden max-w-48 truncate sm:inline">{@current_scope.user.email}</span>
         <.icon name="hero-chevron-down-micro" class="size-4 text-base-content/50" />
       </button>
 
@@ -140,7 +201,7 @@ defmodule EventbusWeb.Layouts do
       >
         <div class="flex items-center justify-between px-3 py-2">
           <div class="min-w-0">
-            <p class="truncate text-sm font-semibold">{@current_scope.user.username}</p>
+            <p class="truncate text-sm font-semibold">{@current_scope.user.email}</p>
             <p class="text-xs text-base-content/50">Signed in</p>
           </div>
           <span

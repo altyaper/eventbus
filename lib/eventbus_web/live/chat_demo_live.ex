@@ -1,7 +1,7 @@
 defmodule EventbusWeb.ChatDemoLive do
   @moduledoc """
   Try an app's chat as one of its users, through the JS SDK the way a
-  consuming app would. The superadmin picks a user id to act as; this page
+  consuming app would. The app's owner picks a user id to act as; this page
   stands in for the app's backend and mints tokens for the SDK (the hook asks
   for one over `pushEvent`, so expiry refreshes work too). Open it in two
   windows as different users to chat with yourself.
@@ -12,7 +12,6 @@ defmodule EventbusWeb.ChatDemoLive do
   import EventbusWeb.AppComponents
 
   alias Eventbus.Applications
-  alias Eventbus.Accounts.Scope
   alias Eventbus.Chat.{Broadcast, Caller, Messages, Rooms, Serializer, Tokens, Users}
 
   @bot "eventbus-bot"
@@ -20,13 +19,7 @@ defmodule EventbusWeb.ChatDemoLive do
   @impl true
   def mount(%{"slug" => slug}, _session, socket) do
     cond do
-      not Scope.superadmin?(socket.assigns.current_scope) ->
-        {:ok,
-         socket
-         |> put_flash(:error, "Only the superadmin can open that page.")
-         |> push_navigate(to: ~p"/apps/#{slug}/chat")}
-
-      app = Applications.get_app_by_slug(slug) ->
+      app = Applications.get_owned_app(socket.assigns.current_scope, slug) ->
         {:ok,
          socket
          |> assign(:page_title, "Chat demo · #{app.slug}")
@@ -130,7 +123,7 @@ defmodule EventbusWeb.ChatDemoLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope} nav={:apps}>
-      <.app_shell app={@app} active={:chat} superadmin?={true} crumb="Demo" crumb_parent={:chat}>
+      <.app_shell app={@app} active={:chat} crumb="Demo" crumb_parent={:chat}>
         <%= if @acting_as do %>
           <div class="mb-4 flex flex-wrap items-center gap-3">
             <p class="text-sm text-base-content/60">

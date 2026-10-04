@@ -36,6 +36,9 @@ config :phoenix_live_view,
 # at the `config/runtime.exs`.
 config :eventbus, Eventbus.Mailer, adapter: Swoosh.Adapters.Local
 
+# Sender of account emails; `MAIL_FROM` overrides it in production.
+config :eventbus, :mail_from, "eventbus <noreply@localhost>"
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.25.4",

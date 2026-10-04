@@ -76,7 +76,7 @@ defmodule EventbusWeb.SetupLive do
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <Layouts.auth_card icon="hero-sparkles" title="Welcome to eventbus">
         <:subtitle>
-          Create the superadmin account. You'll be able to invite more people later.
+          Create the superadmin account. Once it exists, anyone can sign up for their own apps.
         </:subtitle>
 
         <.form
@@ -89,9 +89,10 @@ defmodule EventbusWeb.SetupLive do
           class="space-y-1"
         >
           <.input
-            field={@form[:username]}
-            label="Username"
-            placeholder="admin"
+            field={@form[:email]}
+            type="email"
+            label="Email"
+            placeholder="you@example.com"
             autocomplete="username"
             phx-debounce="300"
             required

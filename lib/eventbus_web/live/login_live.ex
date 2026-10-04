@@ -3,12 +3,12 @@ defmodule EventbusWeb.LoginLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    username = Phoenix.Flash.get(socket.assigns.flash, :username)
+    email = Phoenix.Flash.get(socket.assigns.flash, :email)
 
     {:ok,
      socket
      |> assign(:page_title, "Log in")
-     |> assign(:form, to_form(%{"username" => username}, as: "user"))}
+     |> assign(:form, to_form(%{"email" => email}, as: "user"))}
   end
 
   @impl true
@@ -20,8 +20,9 @@ defmodule EventbusWeb.LoginLive do
 
         <.form for={@form} id="login-form" action={~p"/login"} class="space-y-1">
           <.input
-            field={@form[:username]}
-            label="Username"
+            field={@form[:email]}
+            type="email"
+            label="Email"
             autocomplete="username"
             phx-mounted={JS.focus()}
             required
@@ -33,6 +34,15 @@ defmodule EventbusWeb.LoginLive do
             autocomplete="current-password"
             required
           />
+          <div class="-mt-1 flex justify-end">
+            <.link
+              id="forgot-password-link"
+              navigate={~p"/reset-password"}
+              class="text-xs font-medium text-base-content/60 transition-colors hover:text-primary"
+            >
+              Forgot your password?
+            </.link>
+          </div>
           <button
             id="login-submit"
             type="submit"
@@ -41,6 +51,17 @@ defmodule EventbusWeb.LoginLive do
             Log in <.icon name="hero-arrow-right-micro" class="size-4" />
           </button>
         </.form>
+
+        <p class="mt-6 text-center text-sm text-base-content/60">
+          New to eventbus?
+          <.link
+            id="signup-link"
+            navigate={~p"/signup"}
+            class="font-medium text-primary hover:underline"
+          >
+            Create an account
+          </.link>
+        </p>
       </Layouts.auth_card>
     </Layouts.app>
     """

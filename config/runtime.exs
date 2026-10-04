@@ -164,19 +164,25 @@ if config_env() == :prod do
 
   # ## Configuring the mailer
   #
-  # In production you need to configure the mailer to use a different adapter.
-  # Here is an example configuration for Mailgun:
-  #
-  #     config :eventbus, Eventbus.Mailer,
-  #       adapter: Swoosh.Adapters.Mailgun,
-  #       api_key: System.get_env("MAILGUN_API_KEY"),
-  #       domain: System.get_env("MAILGUN_DOMAIN")
-  #
-  # Most non-SMTP adapters require an API client. Swoosh supports Req, Hackney,
-  # and Finch out-of-the-box. This configuration is typically done at
-  # compile-time in your config/prod.exs:
-  #
-  #     config :swoosh, :api_client, Swoosh.ApiClient.Req
-  #
-  # See https://swoosh.hexdocs.pm/Swoosh.html#module-installation for details.
+  # Account emails (confirmation, password reset) go through Resend when
+  # RESEND_API_KEY is set. Without it they're only logged, links included,
+  # so an instance without email still works: copy links from the logs.
+  # MAIL_FROM is the sender, e.g. "eventbus <noreply@yourdomain.com>"; its
+  # domain must be verified in Resend.
+  case System.get_env("RESEND_API_KEY", "") do
+    "" ->
+      config :eventbus, Eventbus.Mailer,
+        adapter: Swoosh.Adapters.Logger,
+        level: :info,
+        log_full_email: true
+
+    resend_api_key ->
+      config :eventbus, Eventbus.Mailer,
+        adapter: Swoosh.Adapters.Resend,
+        api_key: resend_api_key
+  end
+
+  if mail_from = System.get_env("MAIL_FROM") do
+    config :eventbus, :mail_from, mail_from
+  end
 end

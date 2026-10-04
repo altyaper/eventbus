@@ -6,7 +6,6 @@ defmodule EventbusWeb.ChatRoomLiveTest do
   import Eventbus.ChatFixtures
 
   alias Eventbus.Chat.{Broadcast, Messages, Presence, Rooms, Users}
-  alias Eventbus.Accounts.User
 
   setup do
     app = app_fixture(slug: "acme")
@@ -24,7 +23,7 @@ defmodule EventbusWeb.ChatRoomLiveTest do
     end
   end
 
-  describe "as the superadmin" do
+  describe "as the owner" do
     setup :register_and_log_in_user
 
     test "shows members and messages, newest first", %{conn: conn, ann: ann, room: room} do
@@ -134,38 +133,12 @@ defmodule EventbusWeb.ChatRoomLiveTest do
 
   describe "as another user" do
     setup %{conn: conn} do
-      member =
-        Eventbus.Repo.insert!(%User{
-          username: "member",
-          hashed_password: Bcrypt.hash_pwd_salt("whatever password"),
-          role: "member"
-        })
-
-      %{conn: log_in_user(conn, member)}
+      %{conn: log_in_user(conn, Eventbus.AccountsFixtures.user_fixture())}
     end
 
-    test "sees the room but can't manage members or delete", %{
-      conn: conn,
-      app: app,
-      ann: ann,
-      room: room
-    } do
-      message = message_fixture(ann, room)
-      {:ok, live, _html} = live(conn, ~p"/apps/acme/chat/rooms/#{room.id}")
-      assert has_element?(live, "#message-#{message.id}")
-
-      assert has_element?(live, "#member-ann")
-      refute has_element?(live, "#member-form")
-      refute has_element?(live, "#member-ann-remove")
-
-      refute has_element?(live, "[id$=-delete]")
-      render_hook(live, "remove_member", %{"user-id" => "ann"})
-      render_hook(live, "add_member", %{"member" => %{"user_id" => "cy", "role" => "member"}})
-      assert Rooms.member?(room, Users.get_user(app, "ann"))
-      assert Users.get_user(app, "cy") == nil
-
-      render_hook(live, "delete_message", %{"id" => Integer.to_string(message.id)})
-      refute Messages.get_room_message(room, message.id).deleted_at
+    test "can't open the room", %{conn: conn, room: room} do
+      assert {:error, {:live_redirect, %{to: "/apps"}}} =
+               live(conn, ~p"/apps/acme/chat/rooms/#{room.id}")
     end
   end
 end

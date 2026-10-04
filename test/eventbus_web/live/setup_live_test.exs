@@ -9,7 +9,7 @@ defmodule EventbusWeb.SetupLiveTest do
   defp setup_params(overrides \\ %{}) do
     Map.merge(
       %{
-        username: "admin",
+        email: "admin@example.com",
         password: valid_password(),
         password_confirmation: valid_password(),
         api_key: Eventbus.Settings.api_key()
@@ -40,7 +40,8 @@ defmodule EventbusWeb.SetupLiveTest do
     form = form(live, "#setup-form", user: setup_params())
     render_submit(form)
 
-    assert Accounts.any_users?()
+    assert %{role: "superadmin", confirmed_at: %DateTime{}} =
+             Eventbus.Repo.get_by!(Accounts.User, email: "admin@example.com")
 
     conn = follow_trigger_action(form, conn)
     assert redirected_to(conn) == ~p"/apps"

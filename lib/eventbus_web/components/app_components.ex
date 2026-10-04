@@ -15,11 +15,6 @@ defmodule EventbusWeb.AppComponents do
   ]
 
   @doc """
-  Sections only the superadmin may open.
-  """
-  def superadmin_sections, do: [:credentials, :origins, :settings]
-
-  @doc """
   The path of one of `slug`'s sections.
   """
   def section_path(slug, :topics), do: ~p"/apps/#{slug}/topics"
@@ -30,21 +25,17 @@ defmodule EventbusWeb.AppComponents do
 
   @doc """
   The frame of every page inside an app: breadcrumb, app header and the
-  section menu (a sidebar on desktop, tabs on mobile). Non-superadmins only
-  see Topics and Chat. Section links patch, so `AppLive` doesn't remount.
+  section menu (a sidebar on desktop, tabs on mobile). Section links patch, so `AppLive` doesn't remount.
   """
   attr :app, Eventbus.Applications.App, required: true
   attr :active, :atom, required: true, doc: "the highlighted section"
-  attr :superadmin?, :boolean, required: true
   attr :crumb, :string, default: nil, doc: "an extra breadcrumb after the app, e.g. a topic"
   attr :crumb_parent, :atom, default: :topics, doc: "the section the app breadcrumb links to"
   slot :inner_block, required: true
 
   def app_shell(assigns) do
     sections =
-      for {key, {label, icon}} <- @sections,
-          assigns.superadmin? or key not in superadmin_sections(),
-          do: %{key: key, label: label, icon: icon}
+      for {key, {label, icon}} <- @sections, do: %{key: key, label: label, icon: icon}
 
     assigns = assign(assigns, :sections, sections)
 

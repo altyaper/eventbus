@@ -6,7 +6,7 @@ defmodule EventbusWeb.AppsLiveTest do
   import Eventbus.TopicsFixtures
 
   alias Eventbus.Applications
-  alias Eventbus.Accounts.User
+  import Eventbus.AccountsFixtures
 
   test "/ redirects to My Apps", %{conn: conn} do
     assert redirected_to(get(conn, ~p"/")) == ~p"/apps"
@@ -17,7 +17,7 @@ defmodule EventbusWeb.AppsLiveTest do
     assert get(conn, "/settings").status == 404
   end
 
-  describe "as the superadmin" do
+  describe "as a confirmed user" do
     setup :register_and_log_in_user
 
     test "lists apps with their topic counts, linking to each app", %{conn: conn} do
@@ -58,23 +58,35 @@ defmodule EventbusWeb.AppsLiveTest do
     end
   end
 
-  describe "as another user" do
-    setup %{conn: conn} do
-      member =
-        Eventbus.Repo.insert!(%User{
-          username: "member",
-          hashed_password: Bcrypt.hash_pwd_salt("whatever password"),
-          role: "member"
-        })
+  describe "ownership" do
+    setup :register_and_log_in_user
 
-      %{conn: log_in_user(conn, member)}
-    end
+    test "only lists the user's own apps", %{conn: conn} do
+      app_fixture(slug: "mine")
+      app_fixture(slug: "theirs", owner: user_fixture())
 
-    test "sees apps but can't create them", %{conn: conn} do
-      app_fixture(slug: "chat")
       {:ok, live, _html} = live(conn, ~p"/apps")
 
-      assert has_element?(live, "#app-chat")
+      assert has_element?(live, "#app-mine")
+      refute has_element?(live, "#app-theirs")
+      assert has_element?(live, "#apps-count", "1 app")
+    end
+
+    test "a new app belongs to its creator", %{conn: conn, user: user} do
+      {:ok, live, _html} = live(conn, ~p"/apps")
+      live |> form("#app-form", app: %{slug: "changologs"}) |> render_submit()
+
+      assert Applications.get_app_by_slug("changologs").owner_id == user.id
+    end
+  end
+
+  describe "when unconfirmed" do
+    setup :register_and_log_in_unconfirmed_user
+
+    test "can't create apps", %{conn: conn} do
+      {:ok, live, _html} = live(conn, ~p"/apps")
+
+      assert has_element?(live, "#app-form-locked")
       refute has_element?(live, "#app-form")
 
       render_hook(live, "create_app", %{"app" => %{"slug" => "sneaky"}})

@@ -16,6 +16,15 @@ defmodule EventbusWeb.TopicEventController do
         {:error, :forbidden} ->
           error(conn, :forbidden, "topic belongs to another application")
 
+        {:error, :topic_limit} ->
+          conn
+          |> put_status(:forbidden)
+          |> json(%{
+            error: "topic_limit",
+            message:
+              "Confirm your email to create more than #{Topics.unconfirmed_topic_limit()} topics"
+          })
+
         # The app was deleted between authenticating and creating the topic.
         {:error, %Ecto.Changeset{}} ->
           error(conn, :unauthorized, "unauthorized")
