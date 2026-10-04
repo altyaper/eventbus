@@ -17,10 +17,10 @@ defmodule EventbusWeb.ChatTokenController do
       avatar_url: params["avatar_url"]
     }
 
-    with {:ok, %{token: token, expires_at: expires_at, user: user}} <- Tokens.mint(app, attrs) do
+    with {:ok, minted} <- Tokens.mint(app, attrs) do
       conn
       |> put_status(:created)
-      |> json(%{token: token, expires_at: expires_at, user: Serializer.user(user)})
+      |> json(Serializer.token(app, minted))
     end
   end
 end

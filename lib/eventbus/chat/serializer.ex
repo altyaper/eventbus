@@ -7,6 +7,18 @@ defmodule Eventbus.Chat.Serializer do
 
   alias Eventbus.Chat.{Member, Message, Room, User}
 
+  @doc """
+  What a token mint returns, for the SDK's `getToken`: the token, when it
+  expires, the user, and the app slug (for channel topics).
+  """
+  def token(%Eventbus.Applications.App{slug: slug}, %{
+        token: token,
+        expires_at: expires_at,
+        user: user
+      }) do
+    %{token: token, expires_at: expires_at, user: user(user), app: slug}
+  end
+
   def user(%User{} = user) do
     %{id: user.external_id, display_name: user.display_name, avatar_url: user.avatar_url}
   end

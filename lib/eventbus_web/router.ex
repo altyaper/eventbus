@@ -55,6 +55,7 @@ defmodule EventbusWeb.Router do
       live "/apps/:slug/chat", AppLive, :chat
       live "/apps/:slug/topics/:name", TopicShowLive
       live "/apps/:slug/chat/rooms/:id", ChatRoomLive
+      live "/apps/:slug/chat/demo", ChatDemoLive
     end
   end
 

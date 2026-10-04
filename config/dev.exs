@@ -26,6 +26,7 @@ config :eventbus, EventbusWeb.Endpoint,
   secret_key_base: "5BDFwoajAoRoNBeYehfKev55J3+1EC/grk7l7ouBN/1lSSaXlrSYR/ODSDUIu+3m",
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:eventbus, ~w(--sourcemap=inline --watch)]},
+    esbuild_chat: {Esbuild, :install_and_run, [:eventbus_chat, ~w(--sourcemap=inline --watch)]},
     tailwind: {Tailwind, :install_and_run, [:eventbus, ~w(--watch)]}
   ]
 

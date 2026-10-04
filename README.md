@@ -35,6 +35,51 @@ curl -u "$CLIENT_ID:$CLIENT_SECRET" -X POST http://raspberrypi.local:4000/api/to
 sites need their origin added on the app's **Origins** page, and may then only listen to that
 app's topics. `PHX_HOST` and `PHX_EXTRA_ORIGINS` are always allowed, for every app.
 
+**Chat:** each application also gets chat rooms for its own users (messages, history, replies,
+edits, reactions, typing, presence, unread counts). eventbus never logs those users in: the app's
+backend vouches for them by minting a short-lived token with its credentials.
+
+```
+# Your backend, for its logged-in user (the response is what the SDK's getToken returns)
+curl -u "$CLIENT_ID:$CLIENT_SECRET" -X POST http://raspberrypi.local:4000/api/chat/tokens \
+  -H "Content-Type: application/json" -d '{"user_id": "ann", "display_name": "Ann"}'
+
+# Rooms and members are managed server-side too
+curl -u "$CLIENT_ID:$CLIENT_SECRET" -X POST http://raspberrypi.local:4000/api/chat/rooms \
+  -H "Content-Type: application/json" -d '{"type": "group", "name": "engineering", "members": ["ann", "bo"]}'
+```
+
+Other endpoints (same Basic auth): `POST /api/chat/rooms/:id/members` (`user_id`, `role`),
+`DELETE /api/chat/rooms/:id/members/:user_id`, `POST /api/chat/rooms/:id/messages` (send as a
+user, e.g. a bot) and `DELETE /api/chat/rooms/:id/messages/:message_id` (moderation). Direct
+rooms are `{"type": "direct", "members": ["ann", "bo"]}`.
+
+In the browser, load the SDK from eventbus and build your own UI on its events:
+
+```html
+<script src="http://raspberrypi.local:4000/assets/js/chat.js"></script>
+<script>
+  const chat = new EventbusChat.Chat({
+    url: "ws://raspberrypi.local:4000/socket",
+    getToken: () => fetch("/my-backend/chat-token").then(r => r.json()),
+  })
+  await chat.connect()
+  chat.rooms.on("change", rooms => renderSidebar(rooms))   // unread counts, latest message
+  const room = await chat.room(roomId).attach()
+  room.messages.on("change", messages => renderMessages(messages))
+  room.typing.on("change", () => renderTyping(room.typing.label()))
+  room.presence.on("change", online => renderOnline(online))
+  room.send("hi", {replyTo: messageId})       // shows at once, reconciled with the server
+  room.typing.keystroke()                      // on input; throttled for you
+  room.markRead()                              // when the newest message is in view
+</script>
+```
+
+The site's origin needs to be on the app's **Origins** page, as for topics. The app's **Chat**
+section lists rooms and moderates them, and **Try it in the demo** chats as any user through the
+same SDK (open two windows as different users). The channel contract (`chat:<slug>:<room id>`,
+`chat_user:<slug>:<user id>` and their events) is in `docs/plans/2026-10-03-chat-design.md`.
+
 Build this directly on the target machine so Docker picks the right CPU architecture
 automatically (no cross-compilation needed). The app runs plain HTTP on the LAN
 (`force_ssl` is disabled) and applies Ecto migrations automatically on startup.

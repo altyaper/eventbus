@@ -529,6 +529,14 @@ defmodule EventbusWeb.AppLive do
             </.link>
           </li>
         </ul>
+        <.link
+          :if={@superadmin?}
+          id="open-chat-demo"
+          navigate={~p"/apps/#{@app.slug}/chat/demo"}
+          class="mt-4 inline-flex items-center gap-1.5 rounded-full border border-primary/30 px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/5"
+        >
+          <.icon name="hero-play-micro" class="size-4" /> Try it in the demo
+        </.link>
         <p class="mt-4 text-sm text-base-content/50">
           Chat users connect to <code class="font-mono text-base-content/80">/socket</code>
           with a token from <code class="font-mono text-base-content/80">POST /api/chat/tokens</code>

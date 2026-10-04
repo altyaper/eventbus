@@ -141,7 +141,10 @@ Room topic events:
 ## 4. JS SDK
 
 Plain ES modules in `assets/js/chat/`, depending only on `phoenix`, built as a separate esbuild
-entry (`chat.js`) for other apps; the demo imports the same code.
+profile (`eventbus_chat`) into `/assets/js/chat.js`: an IIFE exposing `window.EventbusChat`, so
+other sites load it with a plain `<script>` tag (an ES module import across origins would need
+CORS headers on static files). The demo imports the same modules. The token response carries the
+app slug, so the SDK can build channel topics.
 
 ```js
 const chat = new Chat({url: "https://eventbus/socket", getToken: () => fetch("/my-backend/chat-token")…})
@@ -173,6 +176,10 @@ room.markRead()  room.loadOlder()  room.detach()
   me; reset on `read_state.updated` and join replies.
 
 README gains a "Chat" section: token endpoint, backend example, SDK quick start.
+
+Verified end to end with two SDK clients in Node against a dev server (send/reconcile, presence,
+typing, reactions, reply/edit/delete, unread, reconnect gap fill, removal) and the demo in
+headless Chrome; there's no JS test runner in the repo.
 
 ## 5. Admin UI and demo
 
