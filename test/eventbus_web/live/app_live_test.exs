@@ -170,6 +170,21 @@ defmodule EventbusWeb.AppLiveTest do
       assert_receive %Phoenix.Socket.Broadcast{event: "disconnect"}
     end
 
+    test "toggles requiring topic tokens from settings", %{conn: conn, app: app} do
+      on_exit(fn -> :persistent_term.erase({Eventbus.TopicTokens, :required_slugs}) end)
+      {:ok, live, _html} = live(conn, ~p"/apps/chat/settings")
+      assert has_element?(live, ~s(#toggle-topic-tokens[aria-checked="false"]))
+
+      live |> element("#toggle-topic-tokens") |> render_click()
+      assert has_element?(live, ~s(#toggle-topic-tokens[aria-checked="true"]))
+      assert Applications.get_app!(app.id).require_topic_tokens
+      assert Eventbus.TopicTokens.required?("chat")
+
+      live |> element("#toggle-topic-tokens") |> render_click()
+      refute Applications.get_app!(app.id).require_topic_tokens
+      refute Eventbus.TopicTokens.required?("chat")
+    end
+
     test "deletes the app from settings", %{conn: conn, app: app} do
       topic_fixture(name: "chat.lobby")
       {:ok, live, _html} = live(conn, ~p"/apps/chat/settings")

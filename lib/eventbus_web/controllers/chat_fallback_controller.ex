@@ -1,7 +1,7 @@
 defmodule EventbusWeb.ChatFallbackController do
   @moduledoc """
-  Turns the chat contexts' errors into JSON responses for the chat API.
-  Another app's room or user is a 404, never a 403.
+  Turns the chat contexts' errors into JSON responses for the chat API and
+  the topic token API. Another app's room or user is a 404, never a 403.
   """
 
   use EventbusWeb, :controller

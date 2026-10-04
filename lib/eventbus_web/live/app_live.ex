@@ -10,7 +10,7 @@ defmodule EventbusWeb.AppLive do
 
   import EventbusWeb.AppComponents
 
-  alias Eventbus.{Applications, Origins, Topics}
+  alias Eventbus.{Applications, Origins, Topics, TopicTokens}
   alias Eventbus.Chat.{Broadcast, Rooms, Users}
   alias Eventbus.Accounts.Scope
   alias Eventbus.Origins.AllowedOrigin
@@ -188,6 +188,18 @@ defmodule EventbusWeb.AppLive do
       {:error, :not_found} ->
         {:noreply, socket}
     end
+  end
+
+  def handle_event("toggle_topic_tokens", _params, socket) do
+    app = socket.assigns.app
+    {:ok, updated} = TopicTokens.set_required(app, not app.require_topic_tokens)
+
+    message =
+      if updated.require_topic_tokens,
+        do: "#{app.slug} topics now need a topic token to listen.",
+        else: "Anyone allowed by origin can listen to #{app.slug} topics again."
+
+    {:noreply, socket |> assign(:app, updated) |> put_flash(:info, message)}
   end
 
   def handle_event("delete_app", _params, socket) do
@@ -845,50 +857,84 @@ defmodule EventbusWeb.AppLive do
 
   defp settings_section(assigns) do
     ~H"""
-    <.card id="danger-zone" class="border-error/30">
-      <h2 class="flex items-center gap-2 font-semibold text-error">
-        <.icon name="hero-exclamation-triangle" class="size-5" /> Danger zone
-      </h2>
-      <div class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p class="font-medium">Delete this application</p>
-          <p class="text-sm text-base-content/50">
-            Deletes its topics, origins and chat. Its credentials and chat tokens stop working immediately.
-          </p>
-        </div>
-        <button
-          id="delete-app"
-          type="button"
-          phx-click={
-            JS.hide()
-            |> JS.show(to: "#delete-confirm", display: "flex", transition: confirm_in())
-          }
-          class="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-error/40 px-4 py-2 text-sm font-semibold text-error transition-colors hover:bg-error/10"
-        >
-          <.icon name="hero-trash-micro" class="size-4" /> Delete app
-        </button>
-        <div id="delete-confirm" class="hidden shrink-0 items-center gap-2 text-sm">
-          <span class="text-base-content/60">Delete {@app.slug}?</span>
+    <div class="space-y-6">
+      <.card id="topic-access">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 class="flex items-center gap-2 font-semibold">
+              <.icon name="hero-key" class="size-5" /> Require tokens to listen
+            </h2>
+            <p class="mt-1 text-sm text-base-content/50">
+              Joins to {@app.slug} topics need a topic token minted by your backend
+              (<code class="font-mono">POST /api/tokens</code>). Listeners without one are refused,
+              even from an allowed origin.
+            </p>
+          </div>
           <button
-            id="delete-cancel"
+            id="toggle-topic-tokens"
             type="button"
-            phx-click={JS.hide(to: "#delete-confirm") |> JS.show(to: "#delete-app")}
-            class="rounded-md px-2 py-1 font-medium text-base-content/70 transition-colors hover:bg-base-content/5"
+            role="switch"
+            aria-checked={to_string(@app.require_topic_tokens)}
+            phx-click="toggle_topic_tokens"
+            class={[
+              "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+              if(@app.require_topic_tokens, do: "bg-primary", else: "bg-base-content/20")
+            ]}
           >
-            Cancel
-          </button>
-          <button
-            id="delete-confirm-button"
-            type="button"
-            phx-click="delete_app"
-            phx-disable-with="Deleting…"
-            class="rounded-md bg-error px-3 py-1 font-semibold text-error-content shadow-sm transition-all hover:brightness-110 active:scale-95"
-          >
-            Delete
+            <span class="sr-only">Require tokens to listen</span>
+            <span class={[
+              "inline-block size-5 rounded-full bg-base-100 shadow transition-transform",
+              if(@app.require_topic_tokens, do: "translate-x-5.5", else: "translate-x-0.5")
+            ]} />
           </button>
         </div>
-      </div>
-    </.card>
+      </.card>
+
+      <.card id="danger-zone" class="border-error/30">
+        <h2 class="flex items-center gap-2 font-semibold text-error">
+          <.icon name="hero-exclamation-triangle" class="size-5" /> Danger zone
+        </h2>
+        <div class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p class="font-medium">Delete this application</p>
+            <p class="text-sm text-base-content/50">
+              Deletes its topics, origins and chat. Its credentials and chat tokens stop working immediately.
+            </p>
+          </div>
+          <button
+            id="delete-app"
+            type="button"
+            phx-click={
+              JS.hide()
+              |> JS.show(to: "#delete-confirm", display: "flex", transition: confirm_in())
+            }
+            class="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-error/40 px-4 py-2 text-sm font-semibold text-error transition-colors hover:bg-error/10"
+          >
+            <.icon name="hero-trash-micro" class="size-4" /> Delete app
+          </button>
+          <div id="delete-confirm" class="hidden shrink-0 items-center gap-2 text-sm">
+            <span class="text-base-content/60">Delete {@app.slug}?</span>
+            <button
+              id="delete-cancel"
+              type="button"
+              phx-click={JS.hide(to: "#delete-confirm") |> JS.show(to: "#delete-app")}
+              class="rounded-md px-2 py-1 font-medium text-base-content/70 transition-colors hover:bg-base-content/5"
+            >
+              Cancel
+            </button>
+            <button
+              id="delete-confirm-button"
+              type="button"
+              phx-click="delete_app"
+              phx-disable-with="Deleting…"
+              class="rounded-md bg-error px-3 py-1 font-semibold text-error-content shadow-sm transition-all hover:brightness-110 active:scale-95"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </.card>
+    </div>
     """
   end
 end

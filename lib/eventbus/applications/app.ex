@@ -13,6 +13,8 @@ defmodule Eventbus.Applications.App do
     field :slug, :string
     field :client_id, :string
     field :secret_hash, :string, redact: true
+    # Refuse topic joins without a topic token (see Eventbus.TopicTokens).
+    field :require_topic_tokens, :boolean, default: false
     # Only set on the struct returned when the secret is (re)generated; the
     # secret itself is never stored.
     field :secret, :string, virtual: true, redact: true

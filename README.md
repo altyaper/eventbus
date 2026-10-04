@@ -35,6 +35,22 @@ curl -u "$CLIENT_ID:$CLIENT_SECRET" -X POST http://raspberrypi.local:4000/api/to
 sites need their origin added on the app's **Origins** page, and may then only listen to that
 app's topics. `PHX_HOST` and `PHX_EXTRA_ORIGINS` are always allowed, for every app.
 
+**Private topics:** origins only say which sites may embed the socket; anyone who knows a topic's
+name can still listen from outside a browser. To decide who listens, the app's backend mints a
+short-lived token listing its user's topics (exact names or `name.*` patterns under the app):
+
+```
+curl -u "$CLIENT_ID:$CLIENT_SECRET" -X POST http://raspberrypi.local:4000/api/tokens \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "u_123", "grants": ["changologs.user.u_123", "changologs.board.ab12.*"], "ttl": 900}'
+```
+
+The browser joins with `socket.channel("topic:changologs.board.ab12", () => ({token}))`. Turn on
+**Require tokens to listen** in the app's settings to refuse joins without one.
+`POST /api/tokens/revoke` with `{"user_id", "grants"}` closes that user's matching channels;
+without `grants` it closes all of them and refuses tokens minted before now. Details:
+`docs/plans/2026-10-03-topic-access-tokens-design.md`.
+
 **Chat:** each application also gets chat rooms for its own users (messages, history, replies,
 edits, reactions, typing, presence, unread counts). eventbus never logs those users in: the app's
 backend vouches for them by minting a short-lived token with its credentials.

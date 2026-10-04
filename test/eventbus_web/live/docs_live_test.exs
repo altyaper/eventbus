@@ -10,7 +10,7 @@ defmodule EventbusWeb.DocsLiveTest do
     assert has_element?(live, "#nav-docs[aria-current=page]")
     refute has_element?(live, "#nav-apps")
 
-    for section <- ~w(overview setup publish react javascript rules) do
+    for section <- ~w(overview setup publish react javascript private rules) do
       assert has_element?(live, "##{section}")
       assert has_element?(live, ~s(#docs-toc a[href="##{section}"]))
     end

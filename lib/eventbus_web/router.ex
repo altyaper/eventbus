@@ -64,6 +64,9 @@ defmodule EventbusWeb.Router do
 
     post "/topics/:name/events", TopicEventController, :create
 
+    post "/tokens", TopicTokenController, :create
+    post "/tokens/revoke", TopicTokenController, :revoke
+
     post "/chat/tokens", ChatTokenController, :create
     post "/chat/rooms", ChatRoomController, :create
     post "/chat/rooms/:room_id/members", ChatRoomController, :add_member

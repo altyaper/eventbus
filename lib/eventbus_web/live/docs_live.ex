@@ -1,7 +1,8 @@
 defmodule EventbusWeb.DocsLive do
   @moduledoc """
-  Public integration guide: how to publish over HTTP and listen from React
-  (with the `@altyaper/eventbus-react` package) or plain JavaScript.
+  Public integration guide: how to publish over HTTP, listen from React
+  (with the `@altyaper/eventbus-react` package) or plain JavaScript, and
+  restrict listening with topic tokens.
   """
 
   use EventbusWeb, :live_view
@@ -16,6 +17,7 @@ defmodule EventbusWeb.DocsLive do
     publish: "Publish events",
     react: "Listen from React",
     javascript: "Plain JavaScript",
+    private: "Private topics",
     rules: "Topics & origins"
   ]
 
@@ -113,6 +115,36 @@ defmodule EventbusWeb.DocsLive do
         .join()
         .receive("ok", () => console.log("listening"))
         .receive("error", ({ reason }) => console.error(reason));\
+      """,
+      mint: """
+      curl -u "$CLIENT_ID:$CLIENT_SECRET" \\
+        -X POST #{http}/api/tokens \\
+        -H "Content-Type: application/json" \\
+        -d '{"user_id": "u_123", "grants": ["myapp.user.u_123", "myapp.board.ab12.*"]}'\
+      """,
+      mint_response: """
+      { "token": "SFMyNTY…", "expires_at": "2026-10-03T12:15:00.000000Z" }\
+      """,
+      private_join: """
+      // `token` comes from your backend, which got it from POST /api/tokens.
+      // Params are a function so a rejoin after a reconnect sends the latest one.
+      const channel = socket.channel("topic:myapp.board.ab12", () => ({ token }));
+      channel.on("event", (event) => render(event));
+      channel.on("revoked", () => channel.leave());
+      channel.join().receive("error", async ({ reason }) => {
+        if (reason === "token expired" || reason === "token revoked") {
+          token = await fetchTokenFromYourBackend(); // the automatic rejoin uses it
+        }
+      });\
+      """,
+      revoke: """
+      # Close u_123's channels on one board (their token stays valid until it expires)
+      curl -u "$CLIENT_ID:$CLIENT_SECRET" -X POST #{http}/api/tokens/revoke \\
+        -H "Content-Type: application/json" -d '{"user_id": "u_123", "grants": ["myapp.board.ab12.*"]}'
+
+      # Close all of u_123's channels and refuse every token minted before now
+      curl -u "$CLIENT_ID:$CLIENT_SECRET" -X POST #{http}/api/tokens/revoke \\
+        -H "Content-Type: application/json" -d '{"user_id": "u_123"}'\
       """
     }
   end
@@ -262,6 +294,38 @@ defmodule EventbusWeb.DocsLive do
               WebSocket and listen for <code class="font-mono">event</code>.
             </p>
             <.code_block id="snippet-javascript" caption="listen.js" code={@snippets.javascript} />
+          </.doc_section>
+
+          <.doc_section id="private" title="Private topics">
+            <p>
+              Anyone who knows a topic's name can listen to it, from an allowed origin or
+              from outside a browser. To decide who listens, your backend mints a
+              short-lived token listing the topics its user may join. Entries are exact
+              topic names or <code class="font-mono">name.*</code>
+              patterns, which match every topic below the name. All must start with
+              your application's name.
+            </p>
+            <.code_block id="snippet-mint" caption="shell" code={@snippets.mint} />
+            <.code_block id="snippet-mint-response" caption="response" code={@snippets.mint_response} />
+            <p>
+              Tokens last 15 minutes unless you pass <code class="font-mono">ttl</code>
+              (seconds, at most 3600). The browser passes the token when it joins:
+            </p>
+            <.code_block id="snippet-private-join" caption="listen.js" code={@snippets.private_join} />
+            <p>
+              Turn on <strong>Require tokens to listen</strong>
+              in the application's settings to refuse listeners without a token. Until
+              then tokens are checked when present and anonymous listeners still get in.
+              When a user loses access, revoke it:
+            </p>
+            <.code_block id="snippet-revoke" caption="shell" code={@snippets.revoke} />
+            <p>
+              Join errors: <code class="font-mono">unauthorized</code>
+              (token required, none sent), <code class="font-mono">forbidden</code>
+              (the token doesn't grant this topic), <code class="font-mono">token expired</code>,
+              <code class="font-mono">token revoked</code>
+              and <code class="font-mono">invalid token</code>.
+            </p>
           </.doc_section>
 
           <.doc_section id="rules" title="Topics & origins">
