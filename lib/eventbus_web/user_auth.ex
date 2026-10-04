@@ -43,6 +43,18 @@ defmodule EventbusWeb.UserAuth do
     |> redirect(to: ~p"/login")
   end
 
+  @doc """
+  Disconnects the open LiveViews of the given (already deleted) session
+  tokens, e.g. after a password reset ended every session.
+  """
+  def disconnect_sessions(tokens) do
+    for token <- tokens do
+      EventbusWeb.Endpoint.broadcast(live_socket_id(token), "disconnect", %{})
+    end
+
+    :ok
+  end
+
   defp live_socket_id(token), do: "users_sessions:#{Base.url_encode64(token)}"
 
   @doc """

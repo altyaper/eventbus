@@ -204,4 +204,60 @@ defmodule Eventbus.AccountsTest do
       assert :error = Accounts.confirm_user("not base64!")
     end
   end
+
+  describe "password reset" do
+    setup do
+      %{user: user_fixture(confirmed: false)}
+    end
+
+    defp request_reset(user) do
+      :ok = Accounts.deliver_user_reset_password_instructions(user.email, capture_token_url())
+      assert_received {:token, token}
+      token
+    end
+
+    test "emails a link only to existing accounts, at most once a minute", %{user: user} do
+      assert :ok = Accounts.deliver_user_reset_password_instructions("nobody@example.com", & &1)
+      refute_email_sent()
+
+      request_reset(user)
+      assert_email_sent(subject: "Reset your eventbus password")
+
+      assert :ok = Accounts.deliver_user_reset_password_instructions(user.email, & &1)
+      refute_email_sent()
+    end
+
+    test "tokens are valid for a day", %{user: user} do
+      token = request_reset(user)
+      assert Accounts.get_user_by_reset_password_token(token).id == user.id
+
+      Repo.update_all(UserToken, set: [inserted_at: DateTime.add(DateTime.utc_now(), -25, :hour)])
+      refute Accounts.get_user_by_reset_password_token(token)
+      refute Accounts.get_user_by_reset_password_token("garbage!")
+    end
+
+    test "resetting ends every session, voids the link and confirms the email", %{user: user} do
+      session = Accounts.generate_user_session_token(user)
+      token = request_reset(user)
+
+      assert {:ok, updated, [^session]} =
+               Accounts.reset_user_password(user, %{
+                 password: "a brand new password",
+                 password_confirmation: "a brand new password"
+               })
+
+      assert updated.confirmed_at
+      refute Accounts.get_user_by_session_token(session)
+      refute Accounts.get_user_by_reset_password_token(token)
+      assert Accounts.get_user_by_email_and_password(user.email, "a brand new password")
+    end
+
+    test "validates the new password", %{user: user} do
+      assert {:error, changeset} =
+               Accounts.reset_user_password(user, %{password: "short", password_confirmation: "x"})
+
+      assert "should be at least 12 character(s)" in errors_on(changeset).password
+      assert Accounts.get_user_by_email_and_password(user.email, valid_password())
+    end
+  end
 end

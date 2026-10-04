@@ -34,6 +34,15 @@ defmodule EventbusWeb.LoginLive do
             autocomplete="current-password"
             required
           />
+          <div class="-mt-1 flex justify-end">
+            <.link
+              id="forgot-password-link"
+              navigate={~p"/reset-password"}
+              class="text-xs font-medium text-base-content/60 transition-colors hover:text-primary"
+            >
+              Forgot your password?
+            </.link>
+          </div>
           <button
             id="login-submit"
             type="submit"

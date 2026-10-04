@@ -32,6 +32,8 @@ defmodule EventbusWeb.Router do
       ] do
       live "/login", LoginLive
       live "/signup", SignupLive
+      live "/reset-password", ResetPasswordRequestLive
+      live "/reset-password/:token", ResetPasswordLive
     end
 
     live_session :public, on_mount: [{EventbusWeb.UserAuth, :mount_current_scope}] do

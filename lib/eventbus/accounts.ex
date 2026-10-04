@@ -162,6 +162,70 @@ defmodule Eventbus.Accounts do
     end
   end
 
+  ## Password reset
+
+  @doc """
+  Emails a reset link to the account with this email, if there is one.
+  Always returns `:ok`, so the form can't be used to discover accounts; also
+  silently skips sending when a link went out less than a minute ago.
+  """
+  def deliver_user_reset_password_instructions(email, url_fun)
+      when is_binary(email) and is_function(url_fun, 1) do
+    with %User{} = user <- Repo.get_by(User, email: String.trim(email)),
+         false <- Repo.exists?(UserToken.recently_sent_query(user, "reset_password")) do
+      deliver_email_token(
+        user,
+        "reset_password",
+        url_fun,
+        &UserNotifier.deliver_reset_password_instructions/2
+      )
+    end
+
+    :ok
+  end
+
+  @doc """
+  Returns the user behind a valid reset token, or `nil`.
+  """
+  def get_user_by_reset_password_token(token) when is_binary(token) do
+    case UserToken.verify_email_token_query(token, "reset_password") do
+      {:ok, query} -> Repo.one(query)
+      :error -> nil
+    end
+  end
+
+  @doc """
+  Changeset for the reset form, without hashing the password.
+  """
+  def change_user_password(%User{} = user, attrs \\ %{}) do
+    User.password_changeset(user, attrs, hash_password: false)
+  end
+
+  @doc """
+  Sets a new password from a reset link and deletes every token the user
+  has: all their sessions and any other emailed link. A completed reset also
+  proves they own the inbox, so it confirms the email if needed.
+
+  Returns `{:ok, user, session_tokens}` with the deleted session tokens, so
+  the caller can disconnect those sessions' live views.
+  """
+  def reset_user_password(%User{} = user, attrs) do
+    changeset =
+      user
+      |> User.password_changeset(attrs)
+      |> then(&if(user.confirmed_at, do: &1, else: User.confirm_changeset(&1)))
+
+    Ecto.Multi.new()
+    |> Ecto.Multi.update(:user, changeset)
+    |> Ecto.Multi.all(:session_tokens, UserToken.by_user_and_contexts_query(user, ["session"]))
+    |> Ecto.Multi.delete_all(:tokens, UserToken.by_user_and_contexts_query(user, :all))
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{user: user, session_tokens: tokens}} -> {:ok, user, Enum.map(tokens, & &1.token)}
+      {:error, :user, changeset, _changes} -> {:error, changeset}
+    end
+  end
+
   defp deliver_email_token(user, context, url_fun, deliver_fun) do
     {encoded, user_token} = UserToken.build_email_token(user, context)
     Repo.insert!(user_token)

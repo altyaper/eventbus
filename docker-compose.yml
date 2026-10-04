@@ -78,6 +78,13 @@ services:
       # generated on first boot and printed in the logs (docker compose logs app)
       # until setup is done. Publishing uses per-application credentials.
       EVENTBUS_API_KEY: ${EVENTBUS_API_KEY:-}
+      # Sends account emails (confirmation, password reset) through Resend.
+      # Leave unset to only log them, links included.
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      # Upgrading an install from before email accounts: the existing
+      # superadmin's email. The migration refuses to run without it.
+      EVENTBUS_ADMIN_EMAIL: ${EVENTBUS_ADMIN_EMAIL:-}
     ports:
       - "4000:4000"
 
