@@ -51,4 +51,17 @@ defmodule Eventbus.AccountsFixtures do
     Process.put(:default_user, user)
     user
   end
+
+  @doc """
+  A `url_fun` for the emailed-link functions that also sends the raw token
+  to the test process as `{:token, token}`.
+  """
+  def capture_token_url do
+    test = self()
+
+    fn token ->
+      send(test, {:token, token})
+      "https://eventbus.test/#{token}"
+    end
+  end
 end

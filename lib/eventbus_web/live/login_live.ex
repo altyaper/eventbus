@@ -42,6 +42,17 @@ defmodule EventbusWeb.LoginLive do
             Log in <.icon name="hero-arrow-right-micro" class="size-4" />
           </button>
         </.form>
+
+        <p class="mt-6 text-center text-sm text-base-content/60">
+          New to eventbus?
+          <.link
+            id="signup-link"
+            navigate={~p"/signup"}
+            class="font-medium text-primary hover:underline"
+          >
+            Create an account
+          </.link>
+        </p>
       </Layouts.auth_card>
     </Layouts.app>
     """

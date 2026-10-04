@@ -31,6 +31,7 @@ defmodule EventbusWeb.Router do
         {EventbusWeb.UserAuth, :redirect_if_authenticated}
       ] do
       live "/login", LoginLive
+      live "/signup", SignupLive
     end
 
     live_session :public, on_mount: [{EventbusWeb.UserAuth, :mount_current_scope}] do
@@ -38,6 +39,10 @@ defmodule EventbusWeb.Router do
     end
 
     get "/", HomeController, :index
+    get "/privacy", LegalController, :privacy
+    get "/terms", LegalController, :terms
+    get "/confirm/:token", ConfirmController, :show
+    post "/confirm/resend", ConfirmController, :resend
     post "/login", SessionController, :create
     delete "/logout", SessionController, :delete
 
