@@ -3,12 +3,12 @@ defmodule EventbusWeb.LoginLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    username = Phoenix.Flash.get(socket.assigns.flash, :username)
+    email = Phoenix.Flash.get(socket.assigns.flash, :email)
 
     {:ok,
      socket
      |> assign(:page_title, "Log in")
-     |> assign(:form, to_form(%{"username" => username}, as: "user"))}
+     |> assign(:form, to_form(%{"email" => email}, as: "user"))}
   end
 
   @impl true
@@ -20,8 +20,9 @@ defmodule EventbusWeb.LoginLive do
 
         <.form for={@form} id="login-form" action={~p"/login"} class="space-y-1">
           <.input
-            field={@form[:username]}
-            label="Username"
+            field={@form[:email]}
+            type="email"
+            label="Email"
             autocomplete="username"
             phx-mounted={JS.focus()}
             required

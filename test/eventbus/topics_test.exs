@@ -31,6 +31,19 @@ defmodule Eventbus.TopicsTest do
       assert {:error, changeset} = Topics.create_topic(app, %{name: "chat.Bad Name"})
       assert errors_on(changeset).name != []
     end
+
+    test "caps an unconfirmed owner's app until they confirm" do
+      owner = Eventbus.AccountsFixtures.user_fixture(confirmed: false)
+      app = app_fixture(slug: "sandbox-x", owner: owner)
+      for i <- 1..5, do: {:ok, _} = Topics.create_topic(app, %{name: "sandbox-x.t#{i}"})
+
+      assert {:error, :topic_limit} = Topics.create_topic(app, %{name: "sandbox-x.t6"})
+      assert {:error, :topic_limit} = Topics.get_or_create_app_topic(app, "sandbox-x.t6")
+      assert {:ok, _} = Topics.get_or_create_app_topic(app, "sandbox-x.t1")
+
+      owner |> Eventbus.Accounts.User.confirm_changeset() |> Eventbus.Repo.update!()
+      assert {:ok, _} = Topics.create_topic(app, %{name: "sandbox-x.t6"})
+    end
   end
 
   describe "get_or_create_app_topic/2" do

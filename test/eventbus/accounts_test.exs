@@ -11,10 +11,15 @@ defmodule Eventbus.AccountsTest do
       refute Accounts.any_users?()
 
       assert {:ok, %User{} = user} =
-               Accounts.create_superadmin(%{username: "  Admin ", password: valid_password()})
+               Accounts.create_superadmin(%{
+                 email: "  admin@example.com ",
+                 password: valid_password()
+               })
 
-      assert user.username == "admin"
+      assert user.email == "admin@example.com"
       assert user.role == "superadmin"
+      assert user.confirmed_at
+      assert user.accepted_terms_at
       assert is_binary(user.hashed_password)
       assert is_nil(user.password)
       assert Accounts.any_users?()
@@ -27,37 +32,48 @@ defmodule Eventbus.AccountsTest do
                Accounts.create_superadmin(valid_user_attributes())
     end
 
-    test "validates username and password" do
+    test "validates email and password" do
       assert {:error, changeset} =
                Accounts.create_superadmin(%{
-                 username: "x!",
+                 email: "not an email",
                  password: "short",
                  password_confirmation: "different"
                })
 
       errors = errors_on(changeset)
-      assert "should be at least 3 character(s)" in errors.username
-      assert "must be lowercase letters, digits, '.', '-', '_'" in errors.username
+      assert "must have the @ sign and no spaces" in errors.email
       assert "should be at least 12 character(s)" in errors.password
       assert "does not match password" in errors.password_confirmation
     end
   end
 
-  describe "get_user_by_username_and_password/2" do
-    test "returns the user for valid credentials, case-insensitive username" do
-      user = user_fixture(username: "jorge")
+  describe "get_user_by_email_and_password/2" do
+    test "returns the user for valid credentials, case-insensitive email" do
+      user = user_fixture(email: "jorge@example.com")
 
       assert %User{id: id} =
-               Accounts.get_user_by_username_and_password("JORGE", valid_password())
+               Accounts.get_user_by_email_and_password(" JORGE@example.com", valid_password())
 
       assert id == user.id
     end
 
     test "returns nil for a wrong password or unknown user" do
       user = user_fixture()
-      refute Accounts.get_user_by_username_and_password(user.username, "wrong password!")
-      refute Accounts.get_user_by_username_and_password("nobody", valid_password())
+      refute Accounts.get_user_by_email_and_password(user.email, "wrong password!")
+      refute Accounts.get_user_by_email_and_password("nobody@example.com", valid_password())
     end
+  end
+
+  test "emails are unique regardless of case" do
+    user_fixture(email: "taken@example.com")
+
+    assert {:error, changeset} =
+             %User{}
+             |> User.registration_changeset(valid_user_attributes(email: "TAKEN@example.com"))
+             |> User.role_changeset("member")
+             |> Repo.insert()
+
+    assert "has already been taken" in errors_on(changeset).email
   end
 
   describe "session tokens" do

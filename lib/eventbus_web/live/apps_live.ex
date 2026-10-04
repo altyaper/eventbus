@@ -1,7 +1,7 @@
 defmodule EventbusWeb.AppsLive do
   @moduledoc """
-  My Apps: a card per application, linking to its pages. The superadmin
-  creates applications here and sees the new secret once.
+  My Apps: a card per application the user owns, linking to its pages.
+  Confirmed users create applications here and see the new secret once.
   """
 
   use EventbusWeb, :live_view
@@ -17,7 +17,7 @@ defmodule EventbusWeb.AppsLive do
     {:ok,
      socket
      |> assign(:page_title, "My Apps")
-     |> assign(:superadmin?, Scope.superadmin?(socket.assigns.current_scope))
+     |> assign(:confirmed?, Scope.confirmed?(socket.assigns.current_scope))
      |> assign(:created, nil)
      |> assign(:app_form, to_form(Applications.change_app(%App{})))
      |> stream_configure(:apps, dom_id: &"app-#{&1.slug}")
@@ -27,7 +27,7 @@ defmodule EventbusWeb.AppsLive do
   # Apps are sorted by slug, so a new one resets the stream rather than
   # being inserted at an end.
   defp assign_apps(socket) do
-    apps = Applications.list_apps_with_topic_counts()
+    apps = Applications.list_apps_with_topic_counts(socket.assigns.current_scope)
 
     socket
     |> assign(:apps_count, length(apps))
@@ -35,23 +35,22 @@ defmodule EventbusWeb.AppsLive do
   end
 
   @impl true
-  def handle_event(_event, _params, %{assigns: %{superadmin?: false}} = socket) do
-    {:noreply, put_flash(socket, :error, "Only the superadmin can do that.")}
-  end
-
   def handle_event("validate_app", %{"app" => params}, socket) do
     changeset = Applications.change_app(%App{}, params)
     {:noreply, assign(socket, :app_form, to_form(changeset, action: :validate))}
   end
 
   def handle_event("create_app", %{"app" => params}, socket) do
-    case Applications.create_app(params) do
+    case Applications.create_app(socket.assigns.current_scope, params) do
       {:ok, app} ->
         {:noreply,
          socket
          |> assign(:app_form, to_form(Applications.change_app(%App{})))
          |> assign(:created, app)
          |> assign_apps()}
+
+      {:error, :unconfirmed} ->
+        {:noreply, put_flash(socket, :error, "Confirm your email to create more apps.")}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :app_form, to_form(changeset))}
@@ -178,17 +177,23 @@ defmodule EventbusWeb.AppsLive do
             </div>
           </div>
 
-          <div
-            :if={@superadmin?}
-            class="rounded-2xl border border-base-content/10 bg-base-100 p-5 shadow-sm"
-          >
+          <div class="rounded-2xl border border-base-content/10 bg-base-100 p-5 shadow-sm">
             <h2 class="flex items-center gap-2 font-semibold">
               <.icon name="hero-plus-circle" class="size-5 text-primary" /> New application
             </h2>
             <p class="mt-1 text-sm text-base-content/50">
               Its name prefixes every topic it owns. It can't be renamed later.
             </p>
+            <p
+              :if={!@confirmed?}
+              id="app-form-locked"
+              class="mt-4 flex gap-2 rounded-lg bg-warning/10 px-3 py-2 text-xs text-base-content/70"
+            >
+              <.icon name="hero-envelope-micro" class="size-4 shrink-0 text-warning" />
+              Confirm your email to create more apps. Until then, try things out in your sandbox app.
+            </p>
             <.form
+              :if={@confirmed?}
               for={@app_form}
               id="app-form"
               phx-change="validate_app"

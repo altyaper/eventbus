@@ -26,6 +26,20 @@ defmodule EventbusWeb.TopicEventControllerTest do
       assert Topics.get_topic_by_name("chat.lobby").application_id == app.id
     end
 
+    test "returns 403 topic_limit past an unconfirmed owner's cap", %{conn: conn} do
+      owner = Eventbus.AccountsFixtures.user_fixture(confirmed: false)
+      app = app_fixture(slug: "sandbox-y", owner: owner)
+      for i <- 1..5, do: Topics.create_topic(app, %{name: "sandbox-y.t#{i}"})
+
+      conn =
+        conn
+        |> basic_auth(app.client_id, app.secret)
+        |> post("/api/topics/sandbox-y.t6/events", %{"hello" => "world"})
+
+      assert %{"error" => "topic_limit", "message" => "Confirm your email" <> _} =
+               json_response(conn, 403)
+    end
+
     test "returns 401 without credentials", %{conn: conn} do
       conn = post(conn, "/api/topics/chat.lobby/events", %{})
       assert json_response(conn, 401) == %{"error" => "unauthorized"}

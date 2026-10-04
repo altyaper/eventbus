@@ -7,8 +7,12 @@ defmodule Eventbus.Topics do
   import Ecto.Query, warn: false
   alias Eventbus.Repo
 
+  alias Eventbus.Accounts.User
   alias Eventbus.Applications.App
   alias Eventbus.Topics.Topic
+
+  # Topics an app may have while its owner hasn't confirmed their email.
+  @unconfirmed_topic_limit 5
 
   @doc """
   Returns the list of topics.
@@ -71,18 +75,43 @@ defmodule Eventbus.Topics do
 
   @doc """
   Creates a topic in `app`. `attrs` carries the full name, slug included.
+
+  Returns `{:error, :topic_limit}` when the app's owner hasn't confirmed
+  their email and the app already has `unconfirmed_topic_limit/0` topics.
   """
   def create_topic(%App{} = app, attrs) do
-    %Topic{}
-    |> Topic.changeset(app, attrs)
-    |> Repo.insert()
+    if topic_limit(app) && count_app_topics(app) >= @unconfirmed_topic_limit do
+      {:error, :topic_limit}
+    else
+      %Topic{}
+      |> Topic.changeset(app, attrs)
+      |> Repo.insert()
+    end
+  end
+
+  def unconfirmed_topic_limit, do: @unconfirmed_topic_limit
+
+  @doc """
+  The app's topic limit: `unconfirmed_topic_limit/0` while its owner hasn't
+  confirmed their email, otherwise `nil` for no limit.
+  """
+  def topic_limit(%App{owner_id: owner_id}) do
+    confirmed? =
+      Repo.exists?(from u in User, where: u.id == ^owner_id and not is_nil(u.confirmed_at))
+
+    if not confirmed?, do: @unconfirmed_topic_limit
+  end
+
+  def count_app_topics(%App{id: app_id}) do
+    Repo.aggregate(from(t in Topic, where: t.application_id == ^app_id), :count)
   end
 
   defdelegate valid_name?(name), to: Topic
 
   @doc """
   Fetches `app`'s topic with the given name, creating it first if it doesn't
-  exist yet. Returns `{:error, :forbidden}` for a name outside the app.
+  exist yet. Returns `{:error, :forbidden}` for a name outside the app and
+  `{:error, :topic_limit}` when creating it would exceed the app's limit.
 
   Race-safe: if two processes try to create the same new topic at once, the
   unique index on `name` rejects the second insert and we re-fetch instead.
@@ -98,6 +127,7 @@ defmodule Eventbus.Topics do
       true ->
         case create_topic(app, %{name: name}) do
           {:ok, topic} -> {:ok, topic}
+          {:error, :topic_limit} -> {:error, :topic_limit}
           {:error, changeset} -> retry_fetch_on_unique_conflict(changeset, name)
         end
     end

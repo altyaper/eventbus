@@ -28,6 +28,9 @@ defmodule Eventbus.Accounts do
       %User{}
       |> User.registration_changeset(attrs)
       |> User.role_changeset("superadmin")
+      # Setup proves ownership with the API key, so there's nothing to confirm.
+      |> User.confirm_changeset()
+      |> Ecto.Changeset.put_change(:accepted_terms_at, DateTime.utc_now(:second))
       |> Repo.insert()
       |> case do
         {:ok, user} -> user
@@ -44,11 +47,11 @@ defmodule Eventbus.Accounts do
   end
 
   @doc """
-  Returns the user if the username and password are valid, otherwise `nil`.
+  Returns the user if the email and password are valid, otherwise `nil`.
   """
-  def get_user_by_username_and_password(username, password)
-      when is_binary(username) and is_binary(password) do
-    user = Repo.get_by(User, username: String.downcase(String.trim(username)))
+  def get_user_by_email_and_password(email, password)
+      when is_binary(email) and is_binary(password) do
+    user = Repo.get_by(User, email: String.trim(email))
     if User.valid_password?(user, password), do: user
   end
 

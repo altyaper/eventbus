@@ -13,4 +13,11 @@ defmodule Eventbus.Accounts.Scope do
 
   def superadmin?(%__MODULE__{user: %User{role: "superadmin"}}), do: true
   def superadmin?(_scope), do: false
+
+  @doc """
+  Whether the user confirmed their email. Unconfirmed users can't create
+  apps and their sandbox app is limited to a few topics.
+  """
+  def confirmed?(%__MODULE__{user: %User{confirmed_at: %DateTime{}}}), do: true
+  def confirmed?(_scope), do: false
 end

@@ -18,9 +18,10 @@ defmodule Eventbus.Applications.App do
     # Only set on the struct returned when the secret is (re)generated; the
     # secret itself is never stored.
     field :secret, :string, virtual: true, redact: true
-    # Only set by Applications.list_apps_with_topic_counts/0.
+    # Only set by Applications.list_apps_with_topic_counts/1.
     field :topics_count, :integer, virtual: true
 
+    belongs_to :owner, Eventbus.Accounts.User
     has_many :topics, Eventbus.Topics.Topic, foreign_key: :application_id
 
     timestamps(type: :utc_datetime)

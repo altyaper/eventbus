@@ -8,20 +8,19 @@ defmodule EventbusWeb.TopicShowLive do
   import EventbusWeb.AppComponents
 
   alias Eventbus.{Applications, Events, Topics}
-  alias Eventbus.Accounts.Scope
 
   @max_events 100
 
   @impl true
   def mount(%{"slug" => slug, "name" => name}, _session, socket) do
     # Topics belong to applications, so the page never creates them.
-    with {:app, app} when not is_nil(app) <- {:app, Applications.get_app_by_slug(slug)},
+    with {:app, app} when not is_nil(app) <-
+           {:app, Applications.get_owned_app(socket.assigns.current_scope, slug)},
          %{application_id: app_id} when app_id == app.id <- Topics.get_topic_by_name(name) do
       {:ok,
        socket
        |> assign(:page_title, name)
        |> assign(:app, app)
-       |> assign(:superadmin?, Scope.superadmin?(socket.assigns.current_scope))
        |> assign(:name, name)
        |> assign(:listening, false)
        |> assign(:events, [])
@@ -106,7 +105,7 @@ defmodule EventbusWeb.TopicShowLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope} nav={:apps}>
-      <.app_shell app={@app} active={:topics} superadmin?={@superadmin?} crumb={@name}>
+      <.app_shell app={@app} active={:topics} crumb={@name}>
         <.header>
           <span class="font-mono">{@name}</span>
           <:subtitle>

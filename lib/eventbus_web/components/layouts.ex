@@ -114,7 +114,7 @@ defmodule EventbusWeb.Layouts do
   end
 
   @doc """
-  The logged-in user's menu: username, role and log out.
+  The logged-in user's menu: email, role and log out.
   """
   attr :current_scope, Eventbus.Accounts.Scope, required: true
 
@@ -128,9 +128,9 @@ defmodule EventbusWeb.Layouts do
         class="flex items-center gap-2 rounded-full border border-base-content/10 py-1 pr-3 pl-1 text-sm font-medium transition-colors hover:border-base-content/20 hover:bg-base-content/5"
       >
         <span class="grid size-7 place-items-center rounded-full bg-primary/15 text-xs font-semibold uppercase text-primary">
-          {String.first(@current_scope.user.username)}
+          {String.first(@current_scope.user.email)}
         </span>
-        <span class="hidden sm:inline">{@current_scope.user.username}</span>
+        <span class="hidden max-w-48 truncate sm:inline">{@current_scope.user.email}</span>
         <.icon name="hero-chevron-down-micro" class="size-4 text-base-content/50" />
       </button>
 
@@ -140,7 +140,7 @@ defmodule EventbusWeb.Layouts do
       >
         <div class="flex items-center justify-between px-3 py-2">
           <div class="min-w-0">
-            <p class="truncate text-sm font-semibold">{@current_scope.user.username}</p>
+            <p class="truncate text-sm font-semibold">{@current_scope.user.email}</p>
             <p class="text-xs text-base-content/50">Signed in</p>
           </div>
           <span

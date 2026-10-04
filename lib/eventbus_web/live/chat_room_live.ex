@@ -2,8 +2,8 @@ defmodule EventbusWeb.ChatRoomLive do
   @moduledoc """
   One chat room inside its app, for the admin: its members and its message
   history, newest first, and who's online, updated live from the same events
-  chat clients get. Managing members and deleting messages (moderation) are
-  superadmin-only.
+  chat clients get. The app's owner manages members and deletes messages
+  (moderation).
   """
 
   use EventbusWeb, :live_view
@@ -11,12 +11,12 @@ defmodule EventbusWeb.ChatRoomLive do
   import EventbusWeb.AppComponents
 
   alias Eventbus.Applications
-  alias Eventbus.Accounts.Scope
   alias Eventbus.Chat.{Broadcast, Member, Messages, Presence, Rooms, Serializer}
 
   @impl true
   def mount(%{"slug" => slug, "id" => id}, _session, socket) do
-    with {:app, app} when not is_nil(app) <- {:app, Applications.get_app_by_slug(slug)},
+    with {:app, app} when not is_nil(app) <-
+           {:app, Applications.get_owned_app(socket.assigns.current_scope, slug)},
          {:room, room} when not is_nil(room) <- {:room, Rooms.get_app_room(app, id)} do
       if connected?(socket), do: Broadcast.subscribe_room(app, room)
 
@@ -28,7 +28,6 @@ defmodule EventbusWeb.ChatRoomLive do
        |> assign(:page_title, room_label(room))
        |> assign(:app, app)
        |> assign(:room, room)
-       |> assign(:superadmin?, Scope.superadmin?(socket.assigns.current_scope))
        |> assign(:members_count, length(members))
        |> assign(:messages_count, length(page.messages))
        |> assign(:oldest_id, oldest_id(page.messages))
@@ -64,10 +63,6 @@ defmodule EventbusWeb.ChatRoomLive do
      |> assign(:oldest_id, oldest_id(page.messages) || socket.assigns.oldest_id)
      |> update(:messages_count, &(&1 + length(page.messages)))
      |> stream(:messages, page.messages |> Enum.reverse() |> Enum.map(&Serializer.message/1))}
-  end
-
-  def handle_event(_event, _params, %{assigns: %{superadmin?: false}} = socket) do
-    {:noreply, put_flash(socket, :error, "Only the superadmin can do that.")}
   end
 
   def handle_event("add_member", %{"member" => params}, socket) do
@@ -195,7 +190,6 @@ defmodule EventbusWeb.ChatRoomLive do
       <.app_shell
         app={@app}
         active={:chat}
-        superadmin?={@superadmin?}
         crumb={room_label(@room)}
         crumb_parent={:chat}
       >
@@ -284,7 +278,7 @@ defmodule EventbusWeb.ChatRoomLive do
                   <% end %>
                 </div>
                 <button
-                  :if={@superadmin? and is_nil(message.deleted_at)}
+                  :if={is_nil(message.deleted_at)}
                   id={"#{id}-delete"}
                   type="button"
                   phx-click="delete_message"
@@ -360,7 +354,7 @@ defmodule EventbusWeb.ChatRoomLive do
                   mod
                 </span>
                 <button
-                  :if={@superadmin? and @room.type != "direct"}
+                  :if={@room.type != "direct"}
                   id={"#{id}-remove"}
                   type="button"
                   phx-click="remove_member"
@@ -374,7 +368,7 @@ defmodule EventbusWeb.ChatRoomLive do
             </ul>
 
             <.form
-              :if={@superadmin? and @room.type != "direct"}
+              :if={@room.type != "direct"}
               for={@member_form}
               id="member-form"
               phx-submit="add_member"
