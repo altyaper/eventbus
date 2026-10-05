@@ -34,6 +34,10 @@ when CI publishes a new image. A merge to `main` reaches the Pi on its own, and 
 the new container boots. To roll back, or to pause updates, pin `app`'s image to one of the
 `:sha-<short>` tags CI also pushes; Watchtower only follows the tag the container runs.
 
+**Database access:** Postgres is published on the Pi's loopback only (`127.0.0.1:5432`). Connect
+with a client's SSH tunnel (in TablePlus, "Over SSH" to the Pi), then `127.0.0.1:5432` with the
+`POSTGRES_*` credentials from `.env`.
+
 **Upgrading from username logins:** set `EVENTBUS_ADMIN_EMAIL` to the superadmin's email before
 upgrading. The migration gives them that email, marks it confirmed and makes them the owner of
 every existing app. Then log in with the email instead of the username.
