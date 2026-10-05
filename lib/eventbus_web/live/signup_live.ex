@@ -19,7 +19,14 @@ defmodule EventbusWeb.SignupLive do
      |> assign_form(Accounts.change_user_signup(%User{}))}
   end
 
+  # Once the account exists the form is posting to /login; any late change or
+  # submit would re-validate the email against the user we just created and
+  # flash "has already been taken" before the redirect lands.
   @impl true
+  def handle_event(_event, _params, %{assigns: %{trigger_submit: true}} = socket) do
+    {:noreply, socket}
+  end
+
   def handle_event("validate", %{"user" => user_params}, socket) do
     changeset = Accounts.change_user_signup(%User{}, user_params)
     {:noreply, assign_form(socket, Map.put(changeset, :action, :validate))}

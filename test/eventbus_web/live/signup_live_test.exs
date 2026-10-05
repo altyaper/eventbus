@@ -81,6 +81,24 @@ defmodule EventbusWeb.SignupLiveTest do
       assert has_element?(apps, "#app-form-locked")
     end
 
+    test "late form events after signup don't flag the new email as taken", %{conn: conn} do
+      {:ok, live, _html} = live(conn, ~p"/signup")
+
+      form = form(live, "#signup-form", user: signup_params())
+      render_submit(form)
+
+      # The browser is still posting the form to /login; a stray change or a
+      # second submit must not surface errors for the account we just made.
+      render_change(form)
+      render_submit(form)
+
+      refute has_element?(live, "#signup-form", "has already been taken")
+      assert Repo.aggregate(User, :count) == 2
+
+      conn = follow_trigger_action(form, conn)
+      assert redirected_to(conn) == ~p"/apps"
+    end
+
     test "logged-in users are sent to My Apps", %{conn: conn, admin: admin} do
       assert {:error, {:redirect, %{to: "/apps"}}} =
                conn |> log_in_user(admin) |> live(~p"/signup")
