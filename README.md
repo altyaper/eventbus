@@ -28,6 +28,12 @@ confirmed it can't create other apps and the sandbox is limited to 5 topics. Con
 password reset emails go through [Resend](https://resend.com) when `RESEND_API_KEY` and
 `MAIL_FROM` are set; otherwise they're only logged, links included.
 
+**Updates:** the stack includes [Watchtower](https://github.com/nicholas-fedor/watchtower), which
+checks Docker Hub every 5 minutes (`WATCHTOWER_POLL_INTERVAL`, in seconds) and redeploys the app
+when CI publishes a new image. A merge to `main` reaches the Pi on its own, and migrations run as
+the new container boots. To roll back, or to pause updates, pin `app`'s image to one of the
+`:sha-<short>` tags CI also pushes; Watchtower only follows the tag the container runs.
+
 **Upgrading from username logins:** set `EVENTBUS_ADMIN_EMAIL` to the superadmin's email before
 upgrading. The migration gives them that email, marks it confirmed and makes them the owner of
 every existing app. Then log in with the email instead of the username.

@@ -25,7 +25,7 @@ services:
 
         # TCP readiness means the real server: the temporary one that
         # first-time init runs listens on the socket only.
-        until pg_isready -q -h 127.0.0.1; do sleep 1; done
+        until pg_isready -q -h 127.0.0.1 -U "$$POSTGRES_USER"; do sleep 1; done
 
         if psql -v ON_ERROR_STOP=1 -q -U "$$POSTGRES_USER" -d postgres \
              -v u="$$POSTGRES_USER" -v p="$$POSTGRES_PASSWORD" -v d="$$POSTGRES_DB" <<'SQL'
@@ -55,6 +55,9 @@ services:
     # Published to Docker Hub by CI on every push to main (and `make docker-push`).
     image: jorgechavzns/eventbus:latest
     restart: unless-stopped
+    # Opts in to the watchtower service below; the db is never touched.
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
     depends_on:
       db:
         condition: service_healthy
@@ -87,6 +90,24 @@ services:
       EVENTBUS_ADMIN_EMAIL: ${EVENTBUS_ADMIN_EMAIL:-}
     ports:
       - "4000:4000"
+
+  # Deploys: polls Docker Hub and, when CI has pushed a new :latest, pulls it
+  # and recreates the app container with the same settings (migrations run on
+  # boot). The Pi only makes outbound requests, so nothing needs exposing.
+  # Roll back by pinning app's image to a :sha-<short> tag. The socket gives it
+  # full control of Docker on this host. This is a maintained fork: the
+  # original containrrr/watchtower hasn't been published since January 2024.
+  watchtower:
+    image: nickfedor/watchtower:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Only containers labelled com.centurylinklabs.watchtower.enable=true.
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_POLL_INTERVAL: ${WATCHTOWER_POLL_INTERVAL:-300}
+      # Delete the replaced image so old releases don't fill the SD card.
+      WATCHTOWER_CLEANUP: "true"
 
 volumes:
   db_data:
